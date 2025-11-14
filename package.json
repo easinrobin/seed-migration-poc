@@ -1,0 +1,33 @@
+{
+  "name": "seed-migration-poc",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "npx drizzle-kit generate",
+    "db:migrate": "npx drizzle-kit migrate",
+    "db:seed": "ts-node src/seed/db-seeder.ts",
+    "db:seed:generate": "ts-node src/seed/generators/excel-to-json.generator.ts",
+    "db:start": "docker-compose start",
+    "db:stop": "docker-compose stop",
+    "db:restart": "docker-compose stop && docker-compose start"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "drizzle-orm": "^0.39.2",
+    "pg": "^8.16.3",
+    "pg-hstore": "^2.3.4",
+    "xlsx": "^0.18.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.5",
+    "@types/pg": "^8.11.11",
+    "drizzle-kit": "^0.30.5",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.7.3"
+  }
+}
