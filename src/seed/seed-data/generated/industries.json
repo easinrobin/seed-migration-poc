@@ -1,14 +1,22 @@
 [
   {
+    "id": "ind_uid_1",
     "name": "Battery"
   },
   {
+    "id": "ind_uid_2",
     "name": "Automotive"
   },
   {
+    "id": "ind_uid_3",
     "name": "Furniture"
   },
   {
+    "id": "ind_uid_4",
     "name": "Textile"
+  },
+  {
+    "id": "ind_uid_5",
+    "name": "Gaming Chair"
   }
 ]

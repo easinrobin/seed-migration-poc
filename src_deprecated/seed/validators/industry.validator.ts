@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 export const IndustrySchema = z.object({
-  id: z.string().nonempty("Id required"),
   name: z
     .string()
     .trim()

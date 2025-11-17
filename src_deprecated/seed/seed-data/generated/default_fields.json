@@ -1,7 +1,6 @@
 [
   {
-    "id": "def_Field_uid_1",
-    "industryId": "ind_uid_1",
+    "industryId": 1,
     "defaultSectionId": 2,
     "name": "GTIN",
     "sequence": 1,
@@ -26,8 +25,7 @@
     "isValidationOverridable": true
   },
   {
-    "id": "def_Field_uid_2",
-    "industryId": "ind_uid_1",
+    "industryId": 1,
     "defaultSectionId": 3,
     "name": "Product Name",
     "sequence": 2,
@@ -52,11 +50,10 @@
     "isValidationOverridable": true
   },
   {
-    "id": "def_Field_uid_3",
-    "industryId": "ind_uid_2",
+    "industryId": 2,
     "defaultSectionId": 4,
     "name": "Product Guranteed Lifetime",
-    "sequence": 3,
+    "sequence": 1,
     "dataType": "number",
     "guiInputType": "input",
     "inputOptions": {},
@@ -71,26 +68,5 @@
     "isEditable": false,
     "isDeletable": true,
     "isValidationOverridable": false
-  },
-  {
-    "id": "def_Field_uid_4",
-    "industryId": "ind_uid_2",
-    "defaultSectionId": 5,
-    "name": "Price",
-    "sequence": 4,
-    "dataType": "string",
-    "guiInputType": "input",
-    "inputOptions": {},
-    "inputRules": {
-      "type": "number",
-      "typeError": "Must be number",
-      "required": true,
-      "requiredError": "Product Guaranteed Lifetime is required"
-    },
-    "unit": "test",
-    "unitSymbol": "test",
-    "isEditable": true,
-    "isDeletable": true,
-    "isValidationOverridable": true
   }
 ]

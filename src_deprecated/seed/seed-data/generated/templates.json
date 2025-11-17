@@ -1,7 +1,6 @@
 [
   {
-    "id": "temp_uid_1",
-    "industryId": "ind_uid_1",
+    "industryId": 1,
     "industryName": "Battery",
     "name": "Carbon zinc battery Template",
     "status": "draft",
@@ -13,8 +12,7 @@
     "maxSections": 10
   },
   {
-    "id": "temp_uid_2",
-    "industryId": "ind_uid_1",
+    "industryId": 1,
     "industryName": "Battery",
     "name": "Li-ion Battery Template",
     "status": "approved",
@@ -26,10 +24,9 @@
     "maxSections": 15
   },
   {
-    "id": "temp_uid_3",
-    "industryId": "ind_uid_2",
+    "industryId": 2,
     "industryName": "Automotive",
-    "name": "BMW Template",
+    "name": "BMWTemplate",
     "status": "published",
     "minFields": 1,
     "maxFields": 300,
@@ -39,8 +36,7 @@
     "maxSections": 20
   },
   {
-    "id": "temp_uid_4",
-    "industryId": "ind_uid_3",
+    "industryId": 3,
     "industryName": "Furniture",
     "name": "Furniture Template",
     "status": "draft",
@@ -52,24 +48,10 @@
     "maxSections": 10
   },
   {
-    "id": "temp_uid_5",
-    "industryId": "ind_uid_4",
+    "industryId": 4,
     "industryName": "Textile",
     "name": "Fusing machine",
     "status": "draft",
-    "minFields": 1,
-    "maxFields": 10,
-    "minSectionLevels": 1,
-    "maxSectionLevels": 10,
-    "minSections": 1,
-    "maxSections": 10
-  },
-  {
-    "id": "temp_uid_5",
-    "industryId": "ind_uid_4",
-    "industryName": "Textile",
-    "name": "Knitting machine",
-    "status": "published",
     "minFields": 1,
     "maxFields": 10,
     "minSectionLevels": 1,

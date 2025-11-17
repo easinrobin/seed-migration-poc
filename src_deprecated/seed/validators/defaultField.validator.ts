@@ -24,11 +24,12 @@ export const InputTypeEnum = z.enum([
 ]);
 
 export const DefaultFieldsSchema = z.object({
-  id: z.string().nonempty("Id required"),
-  industryId: z.string({
-    required_error: "industryId is required",
-    invalid_type_error: "industryId must be a string",
-  }),
+  industryId: z
+    .number({
+      required_error: "industryId is required",
+      invalid_type_error: "industryId must be a number",
+    })
+    .min(1, "industryId must be a positive integer"),
 
   defaultSectionId: z
     .number({
