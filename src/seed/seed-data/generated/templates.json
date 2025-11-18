@@ -76,5 +76,18 @@
     "maxSectionLevels": 10,
     "minSections": 1,
     "maxSections": 10
+  },
+  {
+    "id": "temp_uid_7",
+    "industryId": "ind_uid_2",
+    "industryName": "Automotive",
+    "name": "Audi Template",
+    "status": "draft",
+    "minFields": 1,
+    "maxFields": 25,
+    "minSectionLevels": 1,
+    "maxSectionLevels": 5,
+    "minSections": 1,
+    "maxSections": 10
   }
 ]

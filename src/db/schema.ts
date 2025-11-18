@@ -149,11 +149,11 @@ export const TemplatesRelations = relations(Templates, (rel) => ({
   }),
 }));
 
-// export const seed_versions = drizzle.pgTable("seed_versions", {
-//   key: drizzle.varchar("key", { length: 255 }).primaryKey(),
-//   checksum: drizzle.varchar("checksum", { length: 255 }).notNull(),
-//   updated_at: drizzle
-//     .timestamp("updated_at", { mode: "string" })
-//     .defaultNow()
-//     .notNull(),
-// });
+export const seed_versions = drizzle.pgTable("seed_versions", {
+  key: drizzle.varchar("key", { length: 255 }).primaryKey(),
+  checksum: drizzle.varchar("checksum", { length: 255 }).notNull(),
+  updated_at: drizzle
+    .timestamp("updated_at", { mode: "string" })
+    .defaultNow()
+    .notNull(),
+});

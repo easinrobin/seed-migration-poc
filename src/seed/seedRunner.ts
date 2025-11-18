@@ -1,6 +1,7 @@
 import { SeedEngine } from "./seedEngine";
-import { checksumOfString, readJsonFile, readFileName } from "./utils";
+import { checksumOfFile, readJsonFile, readFileName } from "./utils";
 import { pgPool } from "../db";
+import "dotenv/config";
 
 async function isSeedingRequired(
   fileChecksum: string,
@@ -55,16 +56,16 @@ async function updateSeedVersion(
 
 export async function run() {
   console.log("---- Seeding Industries ----");
-
-  const industryChecksum = checksumOfString(
+  // create file content hash
+  const industryChecksum = await checksumOfFile(
     process.env.INDUSTRY_JSON_FILE_PATH!
   );
   const industryFileName = readFileName(process.env.INDUSTRY_JSON_FILE_PATH!);
-  const seedingRequired = await isSeedingRequired(
+  const indSeedingRequired = await isSeedingRequired(
     industryChecksum,
     industryFileName
   );
-  if (seedingRequired) {
+  if (indSeedingRequired) {
     const industries = await readJsonFile(process.env.INDUSTRY_JSON_FILE_PATH!);
     await SeedEngine.seedIndustries(industries);
 
@@ -72,14 +73,44 @@ export async function run() {
   }
 
   console.log("---- Seeding Templates ----");
-  const templates = await readJsonFile(process.env.TEMPLATE_JSON_FILE_PATH!);
-  await SeedEngine.seedTemplates(templates);
+  // create file content hash
+  const templateHash = await checksumOfFile(
+    process.env.TEMPLATE_JSON_FILE_PATH!
+  );
+  const templateFileName = readFileName(process.env.TEMPLATE_JSON_FILE_PATH!);
+  const tempSeedingRequired = await isSeedingRequired(
+    templateHash,
+    templateFileName
+  );
+
+  if (tempSeedingRequired) {
+    const templates = await readJsonFile(process.env.TEMPLATE_JSON_FILE_PATH!);
+    await SeedEngine.seedTemplates(templates);
+
+    await updateSeedVersion(templateHash, templateFileName);
+  }
 
   console.log("---- Seeding Default Fields ----");
-  const defaultFields = await readJsonFile(
+  // create file content hash
+  const defFieldContentHash = await checksumOfFile(
     process.env.DEFAULT_FIELD_JSON_FILE_PATH!
   );
-  await SeedEngine.seedDefaultFields(defaultFields);
+  const defFieldJsonFileName = readFileName(
+    process.env.DEFAULT_FIELD_JSON_FILE_PATH!
+  );
+  const defFieldSeedingRequired = await isSeedingRequired(
+    defFieldContentHash,
+    defFieldJsonFileName
+  );
+
+  if (defFieldSeedingRequired) {
+    const defaultFields = await readJsonFile(
+      process.env.DEFAULT_FIELD_JSON_FILE_PATH!
+    );
+    await SeedEngine.seedDefaultFields(defaultFields);
+
+    await updateSeedVersion(defFieldContentHash, defFieldJsonFileName);
+  }
 
   console.log("✔ Seeding completed!");
   process.exit(0);

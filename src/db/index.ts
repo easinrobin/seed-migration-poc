@@ -1,10 +1,10 @@
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-import * as schema from "../db/schema";
+import * as schema from "./schema";
 
 const pool = new Pool({
   connectionString:
-    process.env.DATABASE_URL ||
+    process.env.POSTGRES_DB_URI ||
     "postgresql://postgres:postgres@localhost:5434/seed_poc",
 });
 

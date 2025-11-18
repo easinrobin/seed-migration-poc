@@ -92,5 +92,31 @@
     "isEditable": true,
     "isDeletable": true,
     "isValidationOverridable": true
+  },
+  {
+    "id": "def_Field_uid_5",
+    "industryId": "ind_uid_2",
+    "defaultSectionId": 5,
+    "name": "Product Base Price",
+    "sequence": 5,
+    "dataType": "decimal",
+    "guiInputType": "input",
+    "inputOptions": {},
+    "inputRules": {
+      "type": "string",
+      "typeError": "Must be string",
+      "required": true,
+      "requiredError": "Name is required",
+      "regex": "^[\\P{C}]+$",
+      "regexError": "Must contain only English literals, numbers, hyphen and space.",
+      "max": 64,
+      "min": 3,
+      "maxError": "Must not exceed 64 characters"
+    },
+    "unit": "test",
+    "unitSymbol": "test",
+    "isEditable": true,
+    "isDeletable": true,
+    "isValidationOverridable": true
   }
 ]
