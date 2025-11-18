@@ -8,6 +8,10 @@ export async function readJsonFile<T = any>(p: string): Promise<T> {
   return JSON.parse(content) as T;
 }
 
+export function readFileName(filePath: string): string {
+  return path.basename(filePath);
+}
+
 export function checksumOfString(s: string) {
   return createHash("md5").update(s, "utf8").digest("hex");
 }

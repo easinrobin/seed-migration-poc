@@ -76,7 +76,7 @@
     "id": "def_Field_uid_4",
     "industryId": "ind_uid_2",
     "defaultSectionId": 5,
-    "name": "Price",
+    "name": "Product Price",
     "sequence": 4,
     "dataType": "string",
     "guiInputType": "input",
