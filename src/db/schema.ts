@@ -38,7 +38,7 @@ export const TemplateStatusEnum = drizzle.pgEnum("templates_status", [
 ]);
 
 export const DefaultFields = drizzle.pgTable(
-  "defaultField",
+  "DefaultFields",
   {
     id: drizzle.varchar("id", { length: 25 }).primaryKey().unique().notNull(),
     industryId: drizzle
@@ -84,7 +84,7 @@ export const DefaultFieldsRelations = relations(DefaultFields, (rel) => ({
   }),
 }));
 
-export const Industries = drizzle.pgTable("industries", {
+export const Industries = drizzle.pgTable("Industries", {
   id: drizzle.varchar("id", { length: 25 }).primaryKey().unique().notNull(),
   name: drizzle.varchar("name", { length: 64 }).unique().notNull(),
   createdAt: drizzle
@@ -104,7 +104,7 @@ export const IndustriesRelations = relations(Industries, (rel) => ({
 }));
 
 export const Templates = drizzle.pgTable(
-  "template",
+  "Templates",
   {
     id: drizzle.varchar("id", { length: 25 }).primaryKey().unique().notNull(),
     industryId: drizzle
@@ -155,7 +155,7 @@ export const TemplatesRelations = relations(Templates, (rel) => ({
 /**
  * Tracks current version/state of each seed table
  */
-export const seed_version = drizzle.pgTable("seed_version", {
+export const seed_version = drizzle.pgTable("SeedVersion", {
   id: drizzle
     .varchar("id", { length: 36 })
     .primaryKey()
@@ -168,7 +168,6 @@ export const seed_version = drizzle.pgTable("seed_version", {
     .timestamp("applied_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-  appliedBy: drizzle.varchar("applied_by", { length: 255 }).default("system"),
   environment: drizzle.varchar("environment", { length: 50 }).notNull(),
   details: drizzle.jsonb("details").$type<{
     addedCount: number;
@@ -185,7 +184,7 @@ export const seed_version = drizzle.pgTable("seed_version", {
 /**
  * Complete audit trail of all seed synchronizations
  */
-export const seed_history = drizzle.pgTable("seed_history", {
+export const seed_history = drizzle.pgTable("SeedHistory", {
   id: drizzle
     .varchar("id", { length: 36 })
     .primaryKey()
@@ -199,10 +198,8 @@ export const seed_history = drizzle.pgTable("seed_history", {
     .timestamp("applied_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-  appliedBy: drizzle.varchar("applied_by", { length: 255 }).default("system"),
   environment: drizzle.varchar("environment", { length: 50 }).notNull(),
   status: drizzle.varchar("status", { length: 20 }).notNull(), // success, failed, rolled_back
-  executionTimeMs: drizzle.integer("execution_time_ms"),
 
   // Detailed change tracking
   changes: drizzle.jsonb("changes").$type<{
@@ -224,39 +221,4 @@ export const seed_history = drizzle.pgTable("seed_history", {
   // Error tracking
   errorMessage: drizzle.text("error_message"),
   errorStack: drizzle.text("error_stack"),
-});
-
-/**
- * Tracks individual row-level changes for granular auditing
- */
-export const seed_change_log = drizzle.pgTable("seed_change_log", {
-  id: drizzle
-    .varchar("id", { length: 36 })
-    .primaryKey()
-    .notNull()
-    .$defaultFn(() => crypto.randomUUID()),
-  historyId: drizzle
-    .varchar("history_id", { length: 36 })
-    .notNull()
-    .references(() => seed_history.id),
-  tableName: drizzle.varchar("table_name", { length: 255 }).notNull(),
-  recordId: drizzle.varchar("record_id", { length: 255 }).notNull(),
-  action: drizzle.varchar("action", { length: 10 }).notNull(), // insert, update, delete
-  changedAt: drizzle
-    .timestamp("changed_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-
-  // Field-level changes
-  fieldChanges: drizzle.jsonb("field_changes").$type<
-    Array<{
-      field: string;
-      oldValue: any;
-      newValue: any;
-    }>
-  >(),
-
-  // Full row snapshots
-  oldData: drizzle.jsonb("old_data").$type<Record<string, any>>(),
-  newData: drizzle.jsonb("new_data").$type<Record<string, any>>(),
 });
