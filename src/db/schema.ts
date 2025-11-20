@@ -1,3 +1,4 @@
+//schema.ts
 import * as drizzle from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -149,11 +150,113 @@ export const TemplatesRelations = relations(Templates, (rel) => ({
   }),
 }));
 
-export const seed_versions = drizzle.pgTable("seed_versions", {
-  key: drizzle.varchar("key", { length: 255 }).primaryKey(),
-  checksum: drizzle.varchar("checksum", { length: 255 }).notNull(),
-  updated_at: drizzle
-    .timestamp("updated_at", { mode: "string" })
-    .defaultNow()
-    .notNull(),
+// ============= SEED MANAGEMENT TABLES =============
+
+/**
+ * Tracks current version/state of each seed table
+ */
+export const seed_version = drizzle.pgTable("seed_version", {
+  id: drizzle
+    .varchar("id", { length: 36 })
+    .primaryKey()
+    .notNull()
+    .$defaultFn(() => crypto.randomUUID()),
+  tableName: drizzle.varchar("table_name", { length: 255 }).notNull().unique(),
+  version: drizzle.integer("version").notNull().default(1),
+  checksum: drizzle.varchar("checksum", { length: 64 }).notNull(),
+  appliedAt: drizzle
+    .timestamp("applied_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  appliedBy: drizzle.varchar("applied_by", { length: 255 }).default("system"),
+  environment: drizzle.varchar("environment", { length: 50 }).notNull(),
+  details: drizzle.jsonb("details").$type<{
+    addedCount: number;
+    updatedCount: number;
+    skippedCount: number;
+    changes: Array<{
+      id: string;
+      action: "insert" | "update" | "skip";
+      fields?: string[];
+    }>;
+  }>(),
+});
+
+/**
+ * Complete audit trail of all seed synchronizations
+ */
+export const seed_history = drizzle.pgTable("seed_history", {
+  id: drizzle
+    .varchar("id", { length: 36 })
+    .primaryKey()
+    .notNull()
+    .$defaultFn(() => crypto.randomUUID()),
+  tableName: drizzle.varchar("table_name", { length: 255 }).notNull(),
+  version: drizzle.integer("version").notNull(),
+  checksum: drizzle.varchar("checksum", { length: 64 }).notNull(),
+  previousChecksum: drizzle.varchar("previous_checksum", { length: 64 }),
+  appliedAt: drizzle
+    .timestamp("applied_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  appliedBy: drizzle.varchar("applied_by", { length: 255 }).default("system"),
+  environment: drizzle.varchar("environment", { length: 50 }).notNull(),
+  status: drizzle.varchar("status", { length: 20 }).notNull(), // success, failed, rolled_back
+  executionTimeMs: drizzle.integer("execution_time_ms"),
+
+  // Detailed change tracking
+  changes: drizzle.jsonb("changes").$type<{
+    added: Array<{ id: string; data: Record<string, any> }>;
+    updated: Array<{
+      id: string;
+      before: Record<string, any>;
+      after: Record<string, any>;
+      changedFields: string[];
+    }>;
+    deleted: Array<{ id: string; data: Record<string, any> }>;
+  }>(),
+
+  // Snapshot for rollback (stores full state before changes)
+  snapshotBefore: drizzle
+    .jsonb("snapshot_before")
+    .$type<Array<Record<string, any>>>(),
+
+  // Error tracking
+  errorMessage: drizzle.text("error_message"),
+  errorStack: drizzle.text("error_stack"),
+});
+
+/**
+ * Tracks individual row-level changes for granular auditing
+ */
+export const seed_change_log = drizzle.pgTable("seed_change_log", {
+  id: drizzle
+    .varchar("id", { length: 36 })
+    .primaryKey()
+    .notNull()
+    .$defaultFn(() => crypto.randomUUID()),
+  historyId: drizzle
+    .varchar("history_id", { length: 36 })
+    .notNull()
+    .references(() => seed_history.id),
+  tableName: drizzle.varchar("table_name", { length: 255 }).notNull(),
+  recordId: drizzle.varchar("record_id", { length: 255 }).notNull(),
+  action: drizzle.varchar("action", { length: 10 }).notNull(), // insert, update, delete
+  changedAt: drizzle
+    .timestamp("changed_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+
+  // Field-level changes
+  fieldChanges: drizzle.jsonb("field_changes").$type<
+    Array<{
+      field: string;
+      oldValue: any;
+      newValue: any;
+    }>
+  >(),
+
+  // Full row snapshots
+  oldData: drizzle.jsonb("old_data").$type<Record<string, any>>(),
+  newData: drizzle.jsonb("new_data").$type<Record<string, any>>(),
 });
