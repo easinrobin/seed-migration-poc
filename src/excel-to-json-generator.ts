@@ -1,169 +1,197 @@
 import * as XLSX from "xlsx";
 import * as fs from "fs";
 import path from "path";
-import {
-  TemplateSchema,
-  TemplateInput,
-} from "./seed/validators/templates.validator";
-import {
-  IndustrySchema,
-  IndustryInput,
-} from "./seed/validators/industry.validator";
-import {
-  DefaultFieldsSchema,
-  DefaultFieldsInput,
-} from "./seed/validators/defaultField.validator";
+import { TemplateSchema } from "./seed/validators/templates.validator";
+import { IndustrySchema } from "./seed/validators/industry.validator";
+import { DefaultFieldsSchema } from "./seed/validators/defaultField.validator";
 
-const EXCEL_PATH = path.join(
-  __dirname,
-  "./seed/seed-data/excel/data-seed.xlsx"
-);
-const OUTPUT_DIR = path.join(__dirname, "./seed/seed-data/generated");
+// Map sheet name -> { schema, filename }
+const ENTITY_MAP: Record<
+  string,
+  { schema: any; name: string; keyField?: string; inputType?: string }
+> = {
+  templates: { schema: TemplateSchema, name: "templates", keyField: "id" },
+  industries: { schema: IndustrySchema, name: "industries", keyField: "id" },
+  default_fields: {
+    schema: DefaultFieldsSchema,
+    name: "default_fields",
+    keyField: "id",
+  },
+};
 
-interface SheetConfig<T> {
-  name: string;
-  schema: any;
-  requiredColumns?: string[];
-  transform?: (row: any, context: any) => T | null;
+type RowWithMeta = {
+  rowIndex: number;
+  raw: Record<string, any>;
+  validated?: any;
+  environment?: string | null;
+};
+
+function ensureDir(p: string) {
+  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 }
 
-function validateColumns(sheet: XLSX.Sheet, expected: string[]) {
-  const headers = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 })[0];
+/**
+ * Generates:
+ * - seed/seed-data/generated/<entity>.json  (base rows)
+ * - seed/seed-overrides/<env>/<entity>.json (env rows)
+ */
+export function generateFromExcel(
+  excelFilePath = path.join(__dirname, "./seed/seed-data/excel/data-seed.xlsx"),
+  outBase = path.join(__dirname, "seed", "seed-data", "generated")
+) {
+  const workbook = XLSX.readFile(excelFilePath);
+  const overridesBase = path.join(__dirname, "seed", "seed-overrides");
 
-  const missing = expected.filter((col) => !headers.includes(col));
-
-  if (missing.length > 0) {
-    throw new Error(
-      `Sheet "${sheet.name}" is missing columns: ${missing.join(", ")}`
-    );
-  }
-}
-
-async function generateMasterSeed() {
-  console.log("Reading master Excel:", EXCEL_PATH);
-  if (!fs.existsSync(EXCEL_PATH)) {
-    throw new Error(`Excel file not found: ${EXCEL_PATH}`);
-  }
-
-  const workbook = XLSX.readFile(EXCEL_PATH);
   const errors: string[] = [];
+  const sheetData: Record<
+    string,
+    { baseRows: any[]; envMap: Record<string, any[]> }
+  > = {};
 
-  // Ensure output dir
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const normalized = sheetName.trim().toLowerCase().replace(/\s+/g, "_");
 
-  // Step 1: Industries
-  const industriesSheet = workbook.Sheets["industries"];
-  if (!industriesSheet) throw new Error("Missing sheet: industries");
-
-  validateColumns(industriesSheet, ["id", "name"]);
-  const rawIndustries = XLSX.utils.sheet_to_json(industriesSheet);
-  const industries: IndustryInput[] = [];
-
-  rawIndustries.forEach((row: any, i) => {
-    const result = IndustrySchema.safeParse(row);
-    if (!result.success) {
-      errors.push(
-        `[industries] Row ${i + 2}: ${result.error.issues
-          .map((e) => e.message)
-          .join("; ")}`
-      );
-    } else {
-      industries.push(result.data);
-    }
-  });
-
-  // Step 2: Templates (needs industry name → id mapping)
-  const templatesSheet = workbook.Sheets["templates"];
-  if (!templatesSheet) throw new Error("Missing sheet: templates");
-
-  const industryNameToId = Object.fromEntries(
-    industries.map((ind, i) => [ind.id.trim(), ind.id]) // assuming serial starts at 1
-  );
-
-  validateColumns(templatesSheet, ["industryName", "name"]);
-  const rawTemplates = XLSX.utils.sheet_to_json(templatesSheet);
-  const templates: (TemplateInput & { industryId: string })[] = [];
-
-  rawTemplates.forEach((row: any, i) => {
-    const industryName = row.industryId?.trim();
-    const industryId = industryNameToId[industryName];
-
-    if (!industryId) {
-      errors.push(
-        `[templates] Row ${i + 2}: Unknown industry ID "${row.industryId}"`
-      );
-      return;
+    if (!ENTITY_MAP[normalized]) {
+      console.warn(`Skipping sheet "${sheetName}" (no matching entity map).`);
+      continue;
     }
 
-    const parsed = TemplateSchema.safeParse({
-      ...row,
-      industryId,
-    });
+    const { schema } = ENTITY_MAP[normalized];
 
-    if (!parsed.success) {
+    const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+    const parsedRows: RowWithMeta[] = [];
+
+    // Validate header columns vs schema keys
+    const firstRow = rows[0] || {};
+    const headerKeys = Object.keys(firstRow);
+    const expectedKeys = Object.keys(schema.shape);
+    const missing = expectedKeys.filter((k) => !headerKeys.includes(k));
+
+    if (missing.length > 0) {
       errors.push(
-        `[templates] Row ${i + 2}: ${parsed.error.issues
-          .map((e) => e.message)
-          .join("; ")}`
+        `Sheet "${sheetName}" missing expected columns: ${missing.join(", ")}`
       );
-    } else {
-      templates.push(parsed.data);
+      continue;
     }
-  });
 
-  // Step 3: Default Fields
-  const fieldsSheet = workbook.Sheets["default_fields"];
-  if (!fieldsSheet) throw new Error("Missing sheet: default_fields");
+    for (let i = 0; i < rows.length; i++) {
+      const raw = rows[i];
+      const envRaw = (
+        raw["environment"] ||
+        raw["Environment"] ||
+        raw["env"] ||
+        raw["ENVIRONMENT"] ||
+        ""
+      )
+        .toString()
+        .trim();
+      const environment = envRaw === "" ? null : envRaw;
 
-  const rawFields = XLSX.utils.sheet_to_json(fieldsSheet);
-  const defaultFields: DefaultFieldsInput[] = [];
+      // Validate row
+      let validated: any = null;
+      try {
+        const pick: Record<string, any> = {};
+        Object.keys(schema.shape).forEach((k) => {
+          if (k in raw) pick[k] = raw[k];
+        });
+        validated = schema.parse(pick);
+      } catch (err: any) {
+        errors.push(
+          `Validation error in sheet "${sheetName}" row ${
+            i + 2
+          }: ${JSON.stringify(err.errors || err.message)}`
+        );
+      }
 
-  rawFields.forEach((row: any, i) => {
-    const parsed = DefaultFieldsSchema.safeParse({
-      ...row,
-    });
-
-    if (!parsed.success) {
-      errors.push(
-        `[default_fields] Row ${i + 2}: ${parsed.error.issues
-          .map((e) => e.message)
-          .join("; ")}`
-      );
-    } else {
-      defaultFields.push({ ...parsed.data });
+      parsedRows.push({
+        rowIndex: i + 2,
+        raw,
+        validated,
+        environment,
+      });
     }
-  });
 
-  // Final: Fail fast if any error
+    // Partition only after validation
+    const baseRows: any[] = [];
+    const envMap: Record<string, any[]> = {};
+
+    for (const r of parsedRows) {
+      const cleanRow = { ...(r.validated ?? r.raw) };
+
+      if (!r.environment || r.environment.toLowerCase() === "base") {
+        baseRows.push(cleanRow);
+      } else {
+        const env = r.environment;
+        envMap[env] = envMap[env] || [];
+        envMap[env].push(cleanRow);
+      }
+    }
+
+    sheetData[normalized] = { baseRows, envMap };
+  }
+
+  // --- IF ANY ERRORS OCCURRED → ABORT EVERYTHING ---
   if (errors.length > 0) {
-    console.error("Validation FAILED:");
-    errors.forEach((e) => console.error("  •", e));
+    console.error("\n❌ VALIDATION FAILED. NO JSON FILES WERE GENERATED.");
+    console.error("------------------------------------------------------");
+    errors.forEach((e) => console.error("•", e));
+    console.error("------------------------------------------------------\n");
     process.exit(1);
   }
 
-  // Write all JSON files
-  fs.writeFileSync(
-    path.join(OUTPUT_DIR, "industries.json"),
-    JSON.stringify(industries, null, 2)
-  );
-  fs.writeFileSync(
-    path.join(OUTPUT_DIR, "templates.json"),
-    JSON.stringify(templates, null, 2)
-  );
-  fs.writeFileSync(
-    path.join(OUTPUT_DIR, "default_fields.json"),
-    JSON.stringify(defaultFields, null, 2)
-  );
+  // --- SECOND PASS: WRITE JSON ONLY IF EVERYTHING WAS VALID ---
+  ensureDir(outBase);
+  ensureDir(overridesBase);
 
-  console.log("All seed files generated successfully in /seed-data/generated/");
-  console.log(`   • ${industries.length} industries`);
-  console.log(`   • ${templates.length} templates`);
-  console.log(`   • ${defaultFields.length} default fields`);
+  for (const key of Object.keys(sheetData)) {
+    const { baseRows, envMap } = sheetData[key];
+    const entityName = ENTITY_MAP[key].name;
+
+    console.log(`\n📄 Processing sheet: ${entityName}`);
+
+    // Base file
+    const basePath = path.join(outBase, `${ENTITY_MAP[key].name}.json`);
+    fs.writeFileSync(basePath, JSON.stringify(baseRows, null, 2), "utf-8");
+
+    console.log(
+      `   ✔ Base JSON written: ${entityName}.json (${baseRows.length} rows)`
+    );
+    console.log(`     ↳ Path: ${basePath}`);
+
+    // Env overrides
+    const envKeys = Object.keys(envMap);
+    if (envKeys.length === 0) {
+      console.log(`   ✔ No environment overrides found for this sheet.`);
+    } else {
+      for (const env of Object.keys(envMap)) {
+        const envDir = path.join(overridesBase, env);
+        ensureDir(envDir);
+
+        const envPath = path.join(envDir, `${ENTITY_MAP[key].name}.json`);
+        fs.writeFileSync(
+          envPath,
+          JSON.stringify(envMap[env], null, 2),
+          "utf-8"
+        );
+
+        console.log(`   ✔ Env override: [${env}] (${envMap[env].length} rows)`);
+        console.log(`     ↳ Path: ${envPath}`);
+      }
+    }
+  }
+
+  console.log(`\n✅ All sheets valid. Seed JSON generated successfully.`);
+  return { base: outBase, overridesBase };
 }
 
 if (require.main === module) {
-  generateMasterSeed().catch((err) => {
-    console.error(err.message);
-    process.exit(1);
-  });
+  const excelFile = path.join(
+    __dirname,
+    "seed",
+    "seed-data",
+    "excel",
+    "data-seed.xlsx"
+  );
+  generateFromExcel(excelFile);
 }
