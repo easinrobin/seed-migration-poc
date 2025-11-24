@@ -2,6 +2,7 @@ import { SeedEngine } from "./seedEngine";
 import { checksumOfFile, readJsonFile } from "./utils";
 import { pgPool } from "../db";
 import path from "path";
+import { generateUUID } from "./utils";
 import "dotenv/config";
 
 // Define seed configuration
@@ -68,10 +69,7 @@ async function getTableSnapshot(
 ): Promise<Record<string, any>[]> {
   const client = await pgPool.connect();
   try {
-    const res = await client.query({
-      text: "SELECT * FROM $1",
-      values: [tableName],
-    });
+    const res = await client.query(`SELECT * FROM "${tableName}"`);
     return res.rows;
   } catch (err) {
     console.warn(`   ⚠ Could not get snapshot for ${tableName}:`, err);
@@ -133,12 +131,13 @@ async function recordSeedExecution(
 
     // Insert into SeedHistory (audit trail)
     await client.query({
-      text: `INSERT INTO "SeedHistory" (
+      text: `INSERT INTO "SeedHistory" (id,
         table_name, version, checksum, previous_checksum, 
         environment, status, changes, snapshot_before, 
         error_message, error_stack
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       values: [
+        generateUUID(),
         tableName,
         newVersion,
         fileChecksum,
@@ -159,8 +158,8 @@ async function recordSeedExecution(
     // Update SeedVersion (current state) - only on success
     if (status === "success") {
       await client.query({
-        text: `INSERT INTO SeedVersion (table_name, version, checksum, environment, details)
-         VALUES ($1, $2, $3, $4, $5)
+        text: `INSERT INTO "SeedVersion" (id, table_name, version, checksum, environment, details)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (table_name) 
          DO UPDATE SET 
            version = EXCLUDED.version,
@@ -168,6 +167,7 @@ async function recordSeedExecution(
            applied_at = NOW(),
            details = EXCLUDED.details`,
         values: [
+          generateUUID(),
           tableName,
           newVersion,
           fileChecksum,

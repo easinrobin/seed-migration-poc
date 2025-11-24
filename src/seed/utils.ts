@@ -152,29 +152,6 @@ export function isEqual<T>(a: T, b: T): boolean {
   return true;
 }
 
-// Usage examples:
-const obj1 = {
-  name: "John",
-  age: 30,
-  hobbies: ["reading", "coding"],
-  info: { active: true },
-};
-const obj2 = {
-  name: "John",
-  age: 30,
-  hobbies: ["reading", "coding"],
-  info: { active: true },
-};
-
-console.log(isEqual(obj1, obj2)); // true
-
-console.log(isEqual(NaN, NaN)); // true
-console.log(
-  isEqual({ a: new Date("2025-01-01") }, { a: new Date("2025-01-01") })
-); // true
-console.log(isEqual(/test/gi, /test/gi)); // true
-
-// Works with Maps and Sets
-const map1 = new Map([["key", { x: 1 }]]);
-const map2 = new Map([["key", { x: 1 }]]);
-console.log(isEqual(map1, map2)); // true
+export function generateUUID() {
+  return crypto.randomUUID();
+}
