@@ -89,6 +89,7 @@ export const DefaultFieldsSchema = z.object({
   isEditable: z.boolean().default(false),
   isDeletable: z.boolean().default(false),
   isValidationOverridable: z.boolean().default(false),
+  priority: z.string().trim().nonempty(),
 });
 
 export type DefaultFieldsInput = z.infer<typeof DefaultFieldsSchema>;

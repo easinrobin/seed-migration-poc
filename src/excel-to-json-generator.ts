@@ -37,104 +37,6 @@ function ensureDir(p: string) {
 }
 
 /**
- * Compare new rows against existing JSON and mark sync status
- */
-function compareAndMarkSync(
-  newRows: any[],
-  existingJsonPath: string,
-  keyField: string = "id"
-): SyncableRow[] {
-  // If file doesn't exist, mark all as sync: true (new)
-  if (!fs.existsSync(existingJsonPath)) {
-    console.log(`     ℹ No existing file found. Marking all rows as new.`);
-    return newRows.map((row) => ({
-      ...row,
-      sync: true,
-      syncReason: "new" as const,
-    }));
-  }
-
-  // Load existing data
-  let existingData: any[] = [];
-  try {
-    const fileContent = fs.readFileSync(existingJsonPath, "utf-8");
-    existingData = JSON.parse(fileContent);
-  } catch (err) {
-    console.warn(
-      `     ⚠ Could not parse existing file. Treating all rows as new.`
-    );
-    return newRows.map((row) => ({
-      ...row,
-      sync: true,
-      syncReason: "new" as const,
-    }));
-  }
-
-  // Create map of existing rows by keyField
-  const existingMap = new Map<any, any>();
-  for (const row of existingData) {
-    const key = row[keyField];
-    if (key !== undefined && key !== null) {
-      existingMap.set(key, row);
-    }
-  }
-
-  // Compare and mark each new row
-  const syncStats = { new: 0, modified: 0, unchanged: 0 };
-
-  const result = newRows.map((newRow) => {
-    const keyValue = newRow[keyField];
-    const existing = existingMap.get(keyValue);
-
-    if (!existing) {
-      syncStats.new++;
-      return {
-        ...newRow,
-        sync: true,
-        syncReason: "new" as const,
-      };
-    }
-
-    // Deep comparison (excluding sync metadata)
-    const hasChanged = Object.keys(newRow).some((key) => {
-      if (key === "sync" || key === "syncReason") return false;
-
-      // Handle undefined/null equivalence
-      const newVal = newRow[key];
-      const oldVal = existing[key];
-
-      if (newVal === oldVal) return false;
-      if (newVal == null && oldVal == null) return false;
-
-      // Deep comparison using JSON serialization
-      return JSON.stringify(newVal) !== JSON.stringify(oldVal);
-    });
-
-    if (hasChanged) {
-      syncStats.modified++;
-      return {
-        ...newRow,
-        sync: true,
-        syncReason: "modified" as const,
-      };
-    }
-
-    syncStats.unchanged++;
-    return {
-      ...newRow,
-      sync: false,
-      syncReason: "unchanged" as const,
-    };
-  });
-
-  console.log(
-    `     📊 Sync stats: ${syncStats.new} new, ${syncStats.modified} modified, ${syncStats.unchanged} unchanged`
-  );
-
-  return result;
-}
-
-/**
  * Generates:
  * - seed/seed-data/generated/<entity>.json  (base rows)
  * - seed/seed-overrides/<env>/<entity>.json (env rows)
@@ -142,8 +44,7 @@ function compareAndMarkSync(
  */
 export function generateFromExcel(
   excelFilePath = path.join(__dirname, "./seed/seed-data/excel/data-seed.xlsx"),
-  outBase = path.join(__dirname, "seed", "seed-data", "generated"),
-  enableSyncTracking = true
+  outBase = path.join(__dirname, "seed", "seed-data", "generated")
 ) {
   const workbook = XLSX.readFile(excelFilePath);
   const overridesBase = path.join(__dirname, "seed", "seed-overrides");
@@ -253,18 +154,12 @@ export function generateFromExcel(
   for (const key of Object.keys(sheetData)) {
     const { baseRows, envMap } = sheetData[key];
     const entityName = ENTITY_MAP[key].name;
-    const keyField = ENTITY_MAP[key].keyField || "id";
 
     console.log(`\n📄 Processing sheet: ${entityName}`);
 
     // Base file with sync tracking
     const basePath = path.join(outBase, `${ENTITY_MAP[key].name}.json`);
     let finalBaseRows = baseRows;
-
-    if (enableSyncTracking) {
-      console.log(`   🔍 Comparing with existing file...`);
-      finalBaseRows = compareAndMarkSync(baseRows, basePath, keyField);
-    }
 
     fs.writeFileSync(basePath, JSON.stringify(finalBaseRows, null, 2), "utf-8");
 
@@ -284,11 +179,6 @@ export function generateFromExcel(
 
         const envPath = path.join(envDir, `${ENTITY_MAP[key].name}.json`);
         let finalEnvRows = envMap[env];
-
-        if (enableSyncTracking) {
-          console.log(`   🔍 Comparing env [${env}] with existing file...`);
-          finalEnvRows = compareAndMarkSync(envMap[env], envPath, keyField);
-        }
 
         fs.writeFileSync(
           envPath,
@@ -317,7 +207,5 @@ if (require.main === module) {
     "data-seed.xlsx"
   );
 
-  // You can disable sync tracking by passing false as third argument
-  // generateFromExcel(excelFile, undefined, false);
   generateFromExcel(excelFile);
 }

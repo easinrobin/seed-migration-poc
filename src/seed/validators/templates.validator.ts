@@ -41,6 +41,7 @@ export const TemplateSchema = z.object({
 
   minSections: z.number().min(1).default(1),
   maxSections: z.number().min(1).max(20).default(20),
+  priority: z.string().trim().nonempty(),
 });
 
 export type TemplateInput = z.infer<typeof TemplateSchema>;

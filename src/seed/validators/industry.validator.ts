@@ -7,6 +7,7 @@ export const IndustrySchema = z.object({
     .trim()
     .min(2, "Name must have at least 2 characters")
     .max(64, "Name must be 64 characters or less"),
+  priority: z.string().trim().nonempty(),
 });
 
 export type IndustryInput = z.infer<typeof IndustrySchema>;
