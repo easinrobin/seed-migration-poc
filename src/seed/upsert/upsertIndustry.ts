@@ -1,7 +1,7 @@
 import { db } from "../../db";
 import { Industries } from "../../db/schema";
 import { eq } from "drizzle-orm";
-import { isEqual } from "../utils";
+import { isEqual } from "../utils/utils";
 
 export async function upsertIndustry(item: any) {
   const existing = await db.query.Industries.findFirst({

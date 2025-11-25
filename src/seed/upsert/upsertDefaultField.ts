@@ -1,7 +1,7 @@
 import { db } from "../../db";
 import { DefaultFields } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
-import { isEqual } from "../utils";
+import { isEqual } from "../utils/utils";
 
 export async function upsertDefaultField(item: any) {
   const existing = await db.query.DefaultFields.findFirst({

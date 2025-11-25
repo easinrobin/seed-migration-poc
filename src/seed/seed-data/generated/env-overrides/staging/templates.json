@@ -1,0 +1,16 @@
+[
+  {
+    "id": "temp_uid_3",
+    "industryId": "ind_uid_2",
+    "industryName": "Automotive",
+    "name": "BMW Template",
+    "status": "published",
+    "minFields": 1,
+    "maxFields": 300,
+    "minSectionLevels": 1,
+    "maxSectionLevels": 4,
+    "minSections": 1,
+    "maxSections": 20,
+    "priority": "SEED"
+  }
+]

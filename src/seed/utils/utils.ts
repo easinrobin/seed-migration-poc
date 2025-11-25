@@ -155,3 +155,13 @@ export function isEqual<T>(a: T, b: T): boolean {
 export function generateUUID() {
   return crypto.randomUUID();
 }
+
+export function deepCompare(a: any, b: any): boolean {
+  const clean = (obj: any) => {
+    if (!obj) return obj;
+    const { createdAt, updatedAt, ...rest } = obj;
+    return rest;
+  };
+
+  return JSON.stringify(clean(a)) === JSON.stringify(clean(b));
+}

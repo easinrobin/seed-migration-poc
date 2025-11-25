@@ -1,34 +1,31 @@
-import { SeedEngine } from "./seedEngine";
-import { checksumOfFile, readJsonFile } from "./utils";
+import { SeedEngine, SeedStats } from "./engine/seedEngine";
+import { checksumOfFile, readJsonFile, generateUUID } from "./utils/utils";
 import { pgPool } from "../db";
 import path from "path";
-import { generateUUID } from "./utils";
 import "dotenv/config";
 
 // Define seed configuration
 type SeedConfig = {
   tableName: string;
   jsonFilePath: string;
-  seedMethod: (
-    data: any[]
-  ) => Promise<{ inserted: number; updated: number; skipped: number } | void>;
+  seedMethod: (data: any[]) => Promise<SeedStats | void>;
 };
 
 const SEED_CONFIGS: SeedConfig[] = [
   {
     tableName: "Industries",
     jsonFilePath: process.env.INDUSTRY_JSON_FILE_PATH!,
-    seedMethod: SeedEngine.seedIndustries.bind(SeedEngine),
+    seedMethod: (data) => SeedEngine.seed("Industries", data),
   },
   {
     tableName: "Templates",
     jsonFilePath: process.env.TEMPLATE_JSON_FILE_PATH!,
-    seedMethod: SeedEngine.seedTemplates.bind(SeedEngine),
+    seedMethod: (data) => SeedEngine.seed("Templates", data),
   },
   {
     tableName: "DefaultFields",
     jsonFilePath: process.env.DEFAULT_FIELD_JSON_FILE_PATH!,
-    seedMethod: SeedEngine.seedDefaultFields.bind(SeedEngine),
+    seedMethod: (data) => SeedEngine.seed("DefaultFields", data),
   },
 ];
 
@@ -88,7 +85,7 @@ async function recordSeedExecution(
   tableName: string,
   fileChecksum: string,
   currentVersion: number | null,
-  seedStats: { inserted: number; updated: number; skipped: number },
+  seedStats: SeedStats,
   snapshotBefore: Record<string, any>[],
   status: "success" | "failed",
   errorInfo?: { message: string; stack?: string }
@@ -151,8 +148,8 @@ async function recordSeedExecution(
           fileChecksum,
           environment,
           JSON.stringify({
-            addedCount: seedStats.inserted,
-            updatedCount: seedStats.updated,
+            addedCount: seedStats.insert,
+            updatedCount: seedStats.update,
             skippedCount: seedStats.skipped,
             changes: [],
           }),
@@ -163,7 +160,7 @@ async function recordSeedExecution(
     await client.query("COMMIT");
     console.log(`   ✓ Seed tracking updated for ${tableName} (v${newVersion})`);
     console.log(
-      `   📊 Stats: ${seedStats.inserted} inserted, ${seedStats.updated} updated, ${seedStats.skipped} skipped`
+      `   📊 Stats: ${seedStats.insert} inserted, ${seedStats.update} updated, ${seedStats.skipped} skipped`
     );
   } catch (err) {
     await client.query("ROLLBACK");
@@ -182,7 +179,7 @@ async function recordSeedExecution(
  */
 async function processSeed(config: SeedConfig): Promise<{
   skipped: boolean;
-  stats?: { inserted: number; updated: number; skipped: number };
+  stats?: SeedStats;
 }> {
   const { tableName, jsonFilePath, seedMethod } = config;
   const fileName = path.basename(jsonFilePath);
@@ -222,7 +219,7 @@ async function processSeed(config: SeedConfig): Promise<{
     console.log(`   ✅ Seed operation completed`);
 
     // Default stats if method returns void
-    const stats = seedStats || { inserted: 0, updated: 0, skipped: 0 };
+    const stats = seedStats || { insert: 0, update: 0, skipped: 0 };
 
     // Record execution with snapshot taken BEFORE
     await recordSeedExecution(
@@ -251,7 +248,7 @@ async function processSeed(config: SeedConfig): Promise<{
         tableName,
         fileChecksum,
         currentVersion,
-        { inserted: 0, updated: 0, skipped: 0 },
+        { insert: 0, update: 0, skipped: 0 },
         snapshotBefore,
         "failed",
         { message: err.message, stack: err.stack }
@@ -289,8 +286,8 @@ export async function run() {
       } else {
         successCount++;
         if (result.stats) {
-          totalInserted += result.stats.inserted;
-          totalUpdated += result.stats.updated;
+          totalInserted += result.stats.insert;
+          totalUpdated += result.stats.update;
           totalSkipped += result.stats.skipped;
         }
       }

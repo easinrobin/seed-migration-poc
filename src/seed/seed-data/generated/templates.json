@@ -1,18 +1,5 @@
 [
   {
-    "id": "temp_uid_1",
-    "industryId": "ind_uid_1",
-    "industryName": "Battery",
-    "name": "Carbon zinc battery Template",
-    "status": "draft",
-    "minFields": 1,
-    "maxFields": 200,
-    "minSectionLevels": 1,
-    "maxSectionLevels": 2,
-    "minSections": 1,
-    "maxSections": 10
-  },
-  {
     "id": "temp_uid_2",
     "industryId": "ind_uid_1",
     "industryName": "Battery",
@@ -23,20 +10,8 @@
     "minSectionLevels": 1,
     "maxSectionLevels": 3,
     "minSections": 1,
-    "maxSections": 15
-  },
-  {
-    "id": "temp_uid_3",
-    "industryId": "ind_uid_2",
-    "industryName": "Automotive",
-    "name": "BMW Template",
-    "status": "published",
-    "minFields": 1,
-    "maxFields": 300,
-    "minSectionLevels": 1,
-    "maxSectionLevels": 4,
-    "minSections": 1,
-    "maxSections": 20
+    "maxSections": 15,
+    "priority": "DB"
   },
   {
     "id": "temp_uid_4",
@@ -49,7 +24,8 @@
     "minSectionLevels": 1,
     "maxSectionLevels": 5,
     "minSections": 1,
-    "maxSections": 10
+    "maxSections": 10,
+    "priority": "SEED"
   },
   {
     "id": "temp_uid_5",
@@ -62,7 +38,8 @@
     "minSectionLevels": 1,
     "maxSectionLevels": 10,
     "minSections": 1,
-    "maxSections": 10
+    "maxSections": 10,
+    "priority": "SEED"
   },
   {
     "id": "temp_uid_6",
@@ -75,19 +52,21 @@
     "minSectionLevels": 1,
     "maxSectionLevels": 10,
     "minSections": 1,
-    "maxSections": 10
+    "maxSections": 10,
+    "priority": "DB"
   },
   {
     "id": "temp_uid_7",
     "industryId": "ind_uid_2",
     "industryName": "Automotive",
-    "name": "Audi Template",
+    "name": "Base Car template",
     "status": "draft",
     "minFields": 1,
     "maxFields": 25,
     "minSectionLevels": 1,
-    "maxSectionLevels": 5,
+    "maxSectionLevels": 10,
     "minSections": 1,
-    "maxSections": 10
+    "maxSections": 15,
+    "priority": "SEED"
   }
 ]

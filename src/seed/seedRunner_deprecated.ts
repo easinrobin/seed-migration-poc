@@ -1,5 +1,5 @@
-import { SeedEngine } from "./seedEngine";
-import { checksumOfFile, readJsonFile, readFileName } from "./utils";
+import { SeedEngine } from "./seedEngine_deprecated";
+import { checksumOfFile, readJsonFile, readFileName } from "./utils/utils";
 import { pgPool } from "../db";
 import "dotenv/config";
 

@@ -1,7 +1,7 @@
 import { db } from "../../db";
 import { Templates } from "../../db/schema";
 import { eq, and } from "drizzle-orm";
-import { isEqual } from "../utils";
+import { isEqual } from "../utils/utils";
 
 export async function upsertTemplate(item: any) {
   const existing = await db.query.Templates.findFirst({
