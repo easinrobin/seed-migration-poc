@@ -9,7 +9,9 @@ import "dotenv/config";
 type SeedConfig = {
   tableName: string;
   jsonFilePath: string;
-  seedMethod: (data: any[]) => Promise<void>;
+  seedMethod: (
+    data: any[]
+  ) => Promise<{ inserted: number; updated: number; skipped: number } | void>;
 };
 
 const SEED_CONFIGS: SeedConfig[] = [
@@ -80,34 +82,14 @@ async function getTableSnapshot(
 }
 
 /**
- * Calculate statistics from seed data
- */
-function calculateSeedStats(data: any[]): {
-  addedCount: number;
-  updatedCount: number;
-  skippedCount: number;
-} {
-  const added = data.filter(
-    (row) => row.sync === true && row.syncReason === "new"
-  ).length;
-  const updated = data.filter(
-    (row) => row.sync === true && row.syncReason === "modified"
-  ).length;
-  const skipped = data.filter(
-    (row) => row.sync === false && row.syncReason === "unchanged"
-  ).length;
-
-  return { addedCount: added, updatedCount: updated, skippedCount: skipped };
-}
-
-/**
  * Update SeedVersion and create SeedHistory entry
  */
 async function recordSeedExecution(
   tableName: string,
   fileChecksum: string,
   currentVersion: number | null,
-  seedData: any[],
+  seedStats: { inserted: number; updated: number; skipped: number },
+  snapshotBefore: Record<string, any>[],
   status: "success" | "failed",
   errorInfo?: { message: string; stack?: string }
 ): Promise<void> {
@@ -118,10 +100,6 @@ async function recordSeedExecution(
   try {
     await client.query("BEGIN");
 
-    const stats = calculateSeedStats(seedData);
-    const snapshot =
-      status === "success" ? await getTableSnapshot(tableName) : [];
-
     // Get previous checksum for history
     const prevChecksumRes = await client.query({
       text: 'SELECT checksum FROM "SeedVersion" WHERE table_name = $1',
@@ -131,8 +109,8 @@ async function recordSeedExecution(
 
     // Insert into SeedHistory (audit trail)
     await client.query({
-      text: `INSERT INTO "SeedHistory" (id,
-        table_name, version, checksum, previous_checksum, 
+      text: `INSERT INTO "SeedHistory" (
+        id, table_name, version, checksum, previous_checksum, 
         environment, status, changes, snapshot_before, 
         error_message, error_stack
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
@@ -145,11 +123,11 @@ async function recordSeedExecution(
         environment,
         status,
         JSON.stringify({
-          added: seedData.filter((r) => r.syncReason === "new"),
-          updated: seedData.filter((r) => r.syncReason === "modified"),
-          deleted: [], // Not tracking deletions yet
+          added: [],
+          updated: [],
+          deleted: [],
         }),
-        JSON.stringify(snapshot),
+        JSON.stringify(snapshotBefore),
         errorInfo?.message || null,
         errorInfo?.stack || null,
       ],
@@ -173,15 +151,10 @@ async function recordSeedExecution(
           fileChecksum,
           environment,
           JSON.stringify({
-            addedCount: stats.addedCount,
-            updatedCount: stats.updatedCount,
-            skippedCount: stats.skippedCount,
-            changes: seedData
-              .filter((r) => r.sync === true)
-              .map((r) => ({
-                id: r.id,
-                action: r.syncReason === "new" ? "insert" : "update",
-              })),
+            addedCount: seedStats.inserted,
+            updatedCount: seedStats.updated,
+            skippedCount: seedStats.skipped,
+            changes: [],
           }),
         ],
       });
@@ -189,6 +162,9 @@ async function recordSeedExecution(
 
     await client.query("COMMIT");
     console.log(`   ✓ Seed tracking updated for ${tableName} (v${newVersion})`);
+    console.log(
+      `   📊 Stats: ${seedStats.inserted} inserted, ${seedStats.updated} updated, ${seedStats.skipped} skipped`
+    );
   } catch (err) {
     await client.query("ROLLBACK");
     console.error(
@@ -204,7 +180,10 @@ async function recordSeedExecution(
 /**
  * Process a single seed configuration
  */
-async function processSeed(config: SeedConfig): Promise<void> {
+async function processSeed(config: SeedConfig): Promise<{
+  skipped: boolean;
+  stats?: { inserted: number; updated: number; skipped: number };
+}> {
   const { tableName, jsonFilePath, seedMethod } = config;
   const fileName = path.basename(jsonFilePath);
 
@@ -224,47 +203,56 @@ async function processSeed(config: SeedConfig): Promise<void> {
 
     if (!required) {
       console.log(`   ⏭️  Skipped (no changes detected)`);
-      return;
+      return { skipped: true };
     }
+
+    // Take snapshot BEFORE any changes
+    console.log(`   📸 Taking snapshot before changes...`);
+    const snapshotBefore = await getTableSnapshot(tableName);
+    console.log(`   ✓ Snapshot captured (${snapshotBefore.length} rows)`);
 
     // Load seed data
     console.log(`   📖 Loading seed data...`);
     const seedData = await readJsonFile(jsonFilePath);
     console.log(`   📊 Loaded ${seedData.length} rows`);
 
-    // Filter only rows that need syncing
-    const rowsToSync = seedData.filter((row: any) => row.sync === true);
-    console.log(`   🔄 Syncing ${rowsToSync.length} changed rows...`);
-
-    // Execute seed method
-    await seedMethod(rowsToSync);
+    // Execute seed method (returns stats or void)
+    console.log(`   🔄 Executing seed operation...`);
+    const seedStats = await seedMethod(seedData);
     console.log(`   ✅ Seed operation completed`);
 
-    // Record execution
+    // Default stats if method returns void
+    const stats = seedStats || { inserted: 0, updated: 0, skipped: 0 };
+
+    // Record execution with snapshot taken BEFORE
     await recordSeedExecution(
       tableName,
       fileChecksum,
       currentVersion,
-      seedData,
+      stats,
+      snapshotBefore,
       "success"
     );
+
+    return { skipped: false, stats };
   } catch (err: any) {
     console.error(`   ❌ Seed failed for ${tableName}:`, err.message);
 
     // Record failure in history
     try {
       const fileChecksum = await checksumOfFile(jsonFilePath);
-      const seedData = await readJsonFile(jsonFilePath);
       const { currentVersion } = await isSeedingRequired(
         fileChecksum,
         tableName
       );
+      const snapshotBefore = await getTableSnapshot(tableName);
 
       await recordSeedExecution(
         tableName,
         fileChecksum,
         currentVersion,
-        seedData,
+        { inserted: 0, updated: 0, skipped: 0 },
+        snapshotBefore,
         "failed",
         { message: err.message, stack: err.stack }
       );
@@ -288,17 +276,23 @@ export async function run() {
   let successCount = 0;
   let skipCount = 0;
   let failCount = 0;
+  let totalInserted = 0;
+  let totalUpdated = 0;
+  let totalSkipped = 0;
 
   for (const config of SEED_CONFIGS) {
     try {
-      const beforeCount = successCount + skipCount;
-      await processSeed(config);
-      const afterCount = successCount + skipCount;
+      const result = await processSeed(config);
 
-      if (afterCount > beforeCount) {
-        successCount++;
-      } else {
+      if (result.skipped) {
         skipCount++;
+      } else {
+        successCount++;
+        if (result.stats) {
+          totalInserted += result.stats.inserted;
+          totalUpdated += result.stats.updated;
+          totalSkipped += result.stats.skipped;
+        }
       }
     } catch (err) {
       failCount++;
@@ -316,6 +310,13 @@ export async function run() {
   console.log(`   ⏭️  Skipped:    ${skipCount}`);
   console.log(`   ❌ Failed:     ${failCount}`);
   console.log(`   ⏱️  Duration:   ${duration}s`);
+
+  if (successCount > 0) {
+    console.log("\n   📈 Operation Details:");
+    console.log(`      • Inserted: ${totalInserted}`);
+    console.log(`      • Updated:  ${totalUpdated}`);
+    console.log(`      • Skipped:  ${totalSkipped}`);
+  }
   console.log("");
 
   if (failCount > 0) {
