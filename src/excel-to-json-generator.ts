@@ -47,7 +47,13 @@ export function generateFromExcel(
   outBase = path.join(__dirname, "seed", "seed-data", "generated")
 ) {
   const workbook = XLSX.readFile(excelFilePath);
-  const overridesBase = path.join(__dirname, "seed", "seed-overrides");
+  const overridesBase = path.join(
+    __dirname,
+    "seed",
+    "seed-data",
+    "generated",
+    "env-overrides"
+  );
 
   const errors: string[] = [];
   const sheetData: Record<
