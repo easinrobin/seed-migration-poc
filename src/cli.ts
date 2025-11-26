@@ -1,31 +1,60 @@
-// #!/usr/bin/env node
-// import { run } from "./seed/seedRunner";
+#!/usr/bin/env node
+import { runSeed, listSeedVersions } from "./seed/commands";
+import { rollbackTableVersion } from "./seed/engine/rollbackEngine";
 
-// // const env = process.argv[2] || process.env.SEED_ENV || undefined;
+const args = process.argv.slice(2);
 
-// // (async () => {
-// //   try {
-// //     await run();
-// //     process.exit(0);
-// //   } catch (err: any) {
-// //     console.error("Seed engine failed:", err);
-// //     process.exit(1);
-// //   }
-// // })();
+async function main() {
+  const cmd = args[0];
 
-// async function dbSeed() {
-//   try {
-//     await run();
-//     process.exit(0);
-//   } catch (err: any) {
-//     console.error("Seed engine failed:", err);
-//     process.exit(1);
-//   }
-// }
+  switch (cmd) {
+    case "runSeed": {
+      const env = args[1] || process.env.NODE_ENV || "development";
+      await runSeed(env);
+      break;
+    }
 
-// if (require.main === module) {
-//   dbSeed().catch((err) => {
-//     console.error(err.message);
-//     process.exit(1);
-//   });
-// }
+    case "rollbackSeed": {
+      const tableName = args[1];
+      const version = Number(args[2]);
+
+      if (!tableName || !version) {
+        console.error("Usage: seed rollback <tableName> <version>");
+        process.exit(1);
+      }
+
+      await rollbackTableVersion(tableName, version);
+      break;
+    }
+
+    case "listSeedVersions": {
+      const tableName = args[1];
+      if (!tableName) {
+        console.error("Usage: seed list <tableName>");
+        process.exit(1);
+      }
+
+      await listSeedVersions(tableName);
+      break;
+    }
+
+    default:
+      console.log(`
+Usage:
+  seed runSeed                              Run all seeds
+  seed rollbackSeed <table> <version>       Rollback table to version
+  seed listSeedVersions <table>             List history versions for table
+
+Examples:
+  seed runSeed
+  seed rollbackSeed Industries 2
+  seed listSeedVersions Templates
+`);
+      process.exit(0);
+  }
+}
+
+main().catch((err) => {
+  console.error("CLI failed:", err);
+  process.exit(1);
+});
