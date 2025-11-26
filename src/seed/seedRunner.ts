@@ -1,4 +1,5 @@
-import { SeedEngine, SeedStats } from "./engine/seedEngine";
+import { SeedEngine } from "./engine/seedEngine";
+import { SeedStats, ChangeSet, SeedResult } from "../entities/types";
 import {
   checksumOfFile,
   readJsonFile,
@@ -13,7 +14,7 @@ import "dotenv/config";
 type SeedConfig = {
   tableName: string;
   jsonFilePath: string;
-  seedMethod: (data: any[]) => Promise<SeedStats | void>;
+  seedMethod: (data: any[]) => Promise<SeedResult>;
 };
 
 const SEED_CONFIGS: SeedConfig[] = [
@@ -92,7 +93,8 @@ async function recordSeedExecution(
   currentVersion: number | null,
   seedStats: SeedStats,
   snapshotBefore: Record<string, any>[],
-  status: "success" | "failed",
+  changes: ChangeSet,
+  status: "success" | "failed" | "rolled_back",
   errorInfo?: { message: string; stack?: string }
 ): Promise<void> {
   const client = await pgPool.connect();
@@ -124,11 +126,7 @@ async function recordSeedExecution(
         previousChecksum,
         environment,
         status,
-        JSON.stringify({
-          added: [],
-          updated: [],
-          deleted: [],
-        }),
+        JSON.stringify(changes),
         JSON.stringify(snapshotBefore),
         errorInfo?.message || null,
         errorInfo?.stack || null,
@@ -153,10 +151,14 @@ async function recordSeedExecution(
           fileChecksum,
           environment,
           JSON.stringify({
-            addedCount: seedStats.insert,
-            updatedCount: seedStats.update,
+            addedCount: seedStats.inserted,
+            updatedCount: seedStats.updated,
             skippedCount: seedStats.skipped,
-            changes: [],
+            changes: {
+              added: changes.added.map((c) => c.id),
+              updated: changes.updated.map((c) => c.id),
+              deleted: changes.deleted.map((c) => c.id),
+            },
           }),
         ],
       });
@@ -165,7 +167,7 @@ async function recordSeedExecution(
     await client.query("COMMIT");
     console.log(`   ✓ Seed tracking updated for ${tableName} (v${newVersion})`);
     console.log(
-      `   📊 Stats: ${seedStats.insert} inserted, ${seedStats.update} updated, ${seedStats.skipped} skipped`
+      `   📊 Stats: ${seedStats.inserted} inserted, ${seedStats.updated} updated, ${seedStats.skipped} skipped`
     );
   } catch (err) {
     await client.query("ROLLBACK");
@@ -223,23 +225,25 @@ async function processSeed(
 
     // Execute seed method (returns stats or void)
     console.log(`   🔄 Executing seed operation...`);
-    const seedStats = await seedMethod(seedData);
+    const result = await seedMethod(seedData);
     console.log(`   ✅ Seed operation completed`);
 
     // Default stats if method returns void
-    const stats = seedStats || { insert: 0, update: 0, skipped: 0 };
+    const seedStats = result?.stats ?? { inserted: 0, updated: 0, skipped: 0 };
+    const changes = result?.changes ?? { added: [], updated: [], deleted: [] };
 
     // Record execution with snapshot taken BEFORE
     await recordSeedExecution(
       tableName,
       fileChecksum,
       currentVersion,
-      stats,
+      seedStats,
       snapshotBefore,
+      changes,
       "success"
     );
 
-    return { skipped: false, stats };
+    return { skipped: false, stats: seedStats };
   } catch (err: any) {
     console.error(`   ❌ Seed failed for ${tableName}:`, err.message);
 
@@ -256,8 +260,9 @@ async function processSeed(
         tableName,
         fileChecksum,
         currentVersion,
-        { insert: 0, update: 0, skipped: 0 },
+        { inserted: 0, updated: 0, skipped: 0 },
         snapshotBefore,
+        { added: [], updated: [], deleted: [] },
         "failed",
         { message: err.message, stack: err.stack }
       );
@@ -295,8 +300,8 @@ export async function run() {
       } else {
         successCount++;
         if (result.stats) {
-          totalInserted += result.stats.insert;
-          totalUpdated += result.stats.update;
+          totalInserted += result.stats.inserted;
+          totalUpdated += result.stats.updated;
           totalSkipped += result.stats.skipped;
         }
       }
