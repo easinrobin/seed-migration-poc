@@ -1,4 +1,3 @@
-// src/seed/utils.ts
 import fs from "fs/promises";
 import path from "path";
 import { createHash } from "crypto";
@@ -25,16 +24,37 @@ export async function checksumOfFile(p: string) {
  */
 export function deepMerge(base: any, override: any): any {
   if (override === undefined) return base;
+
+  // Array merge: merge items by ID
   if (Array.isArray(base) && Array.isArray(override)) {
-    return override.length ? override : base;
+    const map = new Map<string, any>();
+
+    // Add base items first
+    for (const b of base) {
+      if (b?.id) map.set(b.id, b);
+    }
+
+    // Apply overrides (deep-merge item-by-item)
+    for (const o of override) {
+      if (o?.id) {
+        const existing = map.get(o.id);
+        map.set(o.id, deepMerge(existing || {}, o));
+      }
+    }
+
+    return Array.from(map.values());
   }
+
+  // Object merge (recursive)
   if (isPlainObject(base) && isPlainObject(override)) {
     const res: any = { ...base };
-    for (const k of Object.keys(override)) {
-      res[k] = deepMerge(base[k], override[k]);
+    for (const key of Object.keys(override)) {
+      res[key] = deepMerge(base[key], override[key]);
     }
     return res;
   }
+
+  // Primitive or incompatible types → override takes precedence
   return override;
 }
 
@@ -48,21 +68,27 @@ function isPlainObject(v: any) {
  * override: seed-data/env/<env>/<file>.override.json
  */
 export async function loadWithEnvOverrides<T = any>(
-  fileName: string,
+  baseJsonFilePath: string,
   env?: string
 ): Promise<T> {
-  const basePath = path.resolve(process.cwd(), "seed-data", fileName);
-  const base = await readJsonFile<T>(basePath).catch((e) => {
-    throw new Error(`Cannot load ${basePath}: ${String(e)}`);
+  const base = await readJsonFile<T>(baseJsonFilePath).catch((e) => {
+    throw new Error(`Cannot load ${baseJsonFilePath}: ${String(e)}`);
   });
+  const fileName = readFileName(baseJsonFilePath);
 
   if (!env) return base;
-  const overridePath = path.resolve(
-    process.cwd(),
-    "seed-data",
-    "env",
-    env,
-    fileName.replace(".json", ".override.json")
+  const overridePath = path.normalize(
+    path.join(
+      __dirname,
+      "..",
+      "..",
+      "seed",
+      "seed-data",
+      "generated",
+      "env-overrides",
+      env,
+      fileName
+    )
   );
   try {
     const override = await readJsonFile<any>(overridePath);

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "ind_uid_1",
+    "name": "Battery",
+    "priority": "DB"
+  },
+  {
+    "id": "ind_uid_3",
+    "name": "Furniture",
+    "priority": "DB"
+  }
+]

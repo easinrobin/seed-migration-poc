@@ -135,7 +135,7 @@ export function generateFromExcel(
       if (!r.environment || r.environment.toLowerCase() === "base") {
         baseRows.push(cleanRow);
       } else {
-        const env = r.environment;
+        const env = r.environment.toLocaleLowerCase();
         envMap[env] = envMap[env] || [];
         envMap[env].push(cleanRow);
       }

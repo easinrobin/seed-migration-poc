@@ -12,5 +12,19 @@
     "minSections": 1,
     "maxSections": 20,
     "priority": "SEED"
+  },
+  {
+    "id": "temp_uid_8",
+    "industryId": "ind_uid_6",
+    "industryName": "Footware",
+    "name": "Base Footware Template",
+    "status": "approved",
+    "minFields": 1,
+    "maxFields": 15,
+    "minSectionLevels": 1,
+    "maxSectionLevels": 10,
+    "minSections": 1,
+    "maxSections": 20,
+    "priority": "DB"
   }
 ]

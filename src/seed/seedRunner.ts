@@ -1,5 +1,10 @@
 import { SeedEngine, SeedStats } from "./engine/seedEngine";
-import { checksumOfFile, readJsonFile, generateUUID } from "./utils/utils";
+import {
+  checksumOfFile,
+  readJsonFile,
+  generateUUID,
+  loadWithEnvOverrides,
+} from "./utils/utils";
 import { pgPool } from "../db";
 import path from "path";
 import "dotenv/config";
@@ -177,7 +182,10 @@ async function recordSeedExecution(
 /**
  * Process a single seed configuration
  */
-async function processSeed(config: SeedConfig): Promise<{
+async function processSeed(
+  config: SeedConfig,
+  environment: string
+): Promise<{
   skipped: boolean;
   stats?: SeedStats;
 }> {
@@ -208,9 +216,9 @@ async function processSeed(config: SeedConfig): Promise<{
     const snapshotBefore = await getTableSnapshot(tableName);
     console.log(`   ✓ Snapshot captured (${snapshotBefore.length} rows)`);
 
-    // Load seed data
+    // Load seed data with env overrides
     console.log(`   📖 Loading seed data...`);
-    const seedData = await readJsonFile(jsonFilePath);
+    const seedData = await loadWithEnvOverrides(jsonFilePath, environment);
     console.log(`   📊 Loaded ${seedData.length} rows`);
 
     // Execute seed method (returns stats or void)
@@ -270,6 +278,7 @@ export async function run() {
   console.log("╚════════════════════════════════════════╝");
 
   const startTime = Date.now();
+  const environment = process.env.NODE_ENV || "development";
   let successCount = 0;
   let skipCount = 0;
   let failCount = 0;
@@ -279,7 +288,7 @@ export async function run() {
 
   for (const config of SEED_CONFIGS) {
     try {
-      const result = await processSeed(config);
+      const result = await processSeed(config, environment);
 
       if (result.skipped) {
         skipCount++;

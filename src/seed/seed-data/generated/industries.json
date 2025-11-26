@@ -1,18 +1,8 @@
 [
   {
-    "id": "ind_uid_1",
-    "name": "Battery",
-    "priority": "SEED"
-  },
-  {
     "id": "ind_uid_2",
     "name": "Automotive",
     "priority": "SEED"
-  },
-  {
-    "id": "ind_uid_3",
-    "name": "Furniture",
-    "priority": "DB"
   },
   {
     "id": "ind_uid_4",
@@ -27,6 +17,6 @@
   {
     "id": "ind_uid_6",
     "name": "Footware",
-    "priority": "DB"
+    "priority": "SEED"
   }
 ]
