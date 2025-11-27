@@ -24,7 +24,7 @@ async function main() {
       }
 
       await rollbackTableVersion(tableName, version);
-      break;
+      process.exit(0);
     }
 
     case "listSeedVersions": {
@@ -35,7 +35,7 @@ async function main() {
       }
 
       await listSeedVersions(tableName);
-      break;
+      process.exit(0);
     }
 
     default:

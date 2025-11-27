@@ -9,6 +9,7 @@
     "db:generate": "npx drizzle-kit generate",
     "db:migrate": "npx drizzle-kit migrate",
     "seed": "ts-node src/cli.ts",
+    "seed:generate": "ts-node src/excel-to-json-generator.ts",
     "db:start": "docker-compose start",
     "db:stop": "docker-compose stop",
     "db:restart": "docker-compose stop && docker-compose start"

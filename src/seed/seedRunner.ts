@@ -277,13 +277,13 @@ async function processSeed(
 /**
  * Main seed runner
  */
-export async function run() {
+export async function run(env?: string) {
   console.log("╔════════════════════════════════════════╗");
   console.log("║     Database Seed Operation Started    ║");
   console.log("╚════════════════════════════════════════╝");
 
   const startTime = Date.now();
-  const environment = process.env.NODE_ENV || "development";
+  const environment = env || process.env.NODE_ENV || "development";
   let successCount = 0;
   let skipCount = 0;
   let failCount = 0;
