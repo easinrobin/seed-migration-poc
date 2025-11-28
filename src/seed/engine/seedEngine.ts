@@ -12,13 +12,20 @@ export class SeedEngine {
     const stats: SeedStats = { inserted: 0, updated: 0, skipped: 0 };
     const changes: ChangeSet = { added: [], updated: [], deleted: [] };
 
+    // Load all existing rows ONCE
+    const existingRows = await config.loadAll();
+
     for (const raw of rows) {
       try {
         // 1. Validate using zod schema
         const item = config.schema.parse(raw);
 
         // 2. Run upsert logic
-        const rowChange = await genericUpsertWithChanges(config, item);
+        const rowChange = await genericUpsertWithChanges(
+          config,
+          item,
+          existingRows
+        );
 
         // 3. Update stats
         if (rowChange.action === "insert") {

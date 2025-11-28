@@ -7,12 +7,13 @@ import { DefaultFieldsSchema } from "../validators/defaultField.validator";
 import { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-export type TableConfig<T extends PgTable = PgTable> = {
+export type TableConfig<Row = any, T extends PgTable = PgTable> = {
   table: T;
   queryTable: any; // Drizzle db.query.<Table>
   schema: z.ZodSchema<any>; // Zod schema for validation
   uniqueFields: readonly string[]; // Keys used to identify record
   displayField?: string; // For logging (optional)
+  loadAll(): Promise<Row[]>;
 };
 
 export const TABLE_REGISTRY = {
@@ -22,25 +23,32 @@ export const TABLE_REGISTRY = {
     schema: IndustrySchema,
     uniqueFields: ["id"],
     displayField: "name",
-  },
+    loadAll: async () => await db.select().from(Industries),
+  } satisfies TableConfig<typeof Industries.$inferSelect>,
+
   Templates: {
     table: Templates,
     queryTable: db.query.Templates,
     schema: TemplateSchema,
     uniqueFields: ["industryId", "id"],
     displayField: "name",
-  },
+    loadAll: async () => await db.select().from(Templates),
+  } satisfies TableConfig<typeof Templates.$inferSelect>,
+
   DefaultFields: {
     table: DefaultFields,
     queryTable: db.query.DefaultFields,
     schema: DefaultFieldsSchema,
     uniqueFields: ["industryId", "id"],
     displayField: "name",
-  },
+    loadAll: async () => await db.select().from(DefaultFields),
+  } satisfies TableConfig<typeof DefaultFields.$inferSelect>,
 } as const;
 
 export type TableName = keyof typeof TABLE_REGISTRY;
 
-export function getTableConfig<T extends TableName>(name: T): TableConfig {
+export function getTableConfig<T extends TableName>(
+  name: T
+): (typeof TABLE_REGISTRY)[T] {
   return TABLE_REGISTRY[name];
 }

@@ -16,42 +16,58 @@ export type RowChange =
 
 export async function genericUpsertWithChanges(
   config: TableConfig,
-  item: any
+  item: any,
+  existingRows: any[]
 ): Promise<RowChange> {
-  const { table, queryTable, uniqueFields } = config;
-  const priority = (item.priority?.toUpperCase?.() || "SEED") as "SEED" | "DB";
+  const { table, uniqueFields } = config;
 
-  // Prepare WHERE clause
-  const where = buildWhereClause(table, uniqueFields, item);
+  const seedPriority = (item.priority?.toUpperCase?.() || "SEED") as
+    | "SEED"
+    | "DB";
 
-  // Find existing row
-  const existing = await queryTable.findFirst({ where });
+  // 1️⃣ Find the existing row from in-memory rows
+  const existing = existingRows.find((row) =>
+    uniqueFields.every((key) => row[key] === item[key])
+  );
 
-  // -------- CASE 1: Not exists → INSERT (both SEED & DB)
+  // 2️⃣ INSERT (not exists)
   if (!existing) {
     const [inserted] = await db.insert(table).values(item).returning();
+
+    // Update in-memory cache to keep consistency
+    existingRows.push(inserted);
+
     return { action: "insert", id: String(inserted.id), data: inserted };
   }
 
-  // -------- CASE 2: Exists + priority = DB → SKIP
-  if (priority === "DB") {
+  // 3️⃣ Exists + DB priority → skip
+  if (seedPriority === "DB") {
     return { action: "skip", id: existing.id, data: existing };
   }
 
-  // -------- CASE 3: Exists + SEED priority → compare & update if needed
+  // 4️⃣ Compare (ignore metadata)
   const { createdAt, updatedAt, ...existingData } = existing;
-  if (deepCompare(existingData, item)) {
+  const { priority, ...itemData } = item;
+
+  if (deepCompare(existingData, itemData)) {
     return { action: "skip", id: existing.id, data: existing };
   }
 
+  // 5️⃣ Update record
   const before = existing;
   const [updated] = await db
     .update(table)
     .set({ ...item, updatedAt: new Date() })
-    .where(where!)
+    .where(buildWhereClause(table, uniqueFields, item)!)
     .returning();
 
-  // compute changed fields
+  // Update in-memory array
+  const index = existingRows.findIndex((row) =>
+    uniqueFields.every((key) => row[key] === item[key])
+  );
+  if (index !== -1) existingRows[index] = updated;
+
+  // Identify changed fields
   const changedFields = Object.keys(item).filter(
     (k) => JSON.stringify(before[k]) !== JSON.stringify(item[k])
   );
