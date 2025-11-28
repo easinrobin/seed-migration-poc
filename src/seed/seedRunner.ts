@@ -222,7 +222,7 @@ export async function run(env?: string) {
   console.log("╚════════════════════════════════════════╝");
 
   const startTime = Date.now();
-  const environment = env || process.env.NODE_ENV || "development";
+  const environment = env || process.env.NODE_ENV || "local";
 
   try {
     const { batch, seedInfo } = await prepareSeedBatch(environment);
