@@ -1,6 +1,7 @@
 import { TableName, getTableConfig } from "../config/tableRegistry";
 import { genericUpsertWithChanges } from "./upsert";
 import { SeedStats, ChangeSet, SeedResult } from "../../entities/types";
+import { buildDependencyGraph, topologicalSort } from "../utils/utils";
 
 export class SeedEngine {
   /**
@@ -56,10 +57,23 @@ export class SeedEngine {
   /**
    * Seed multiple tables in sequence
    */
-  static async seedBatch(batch: Record<TableName, any[]>) {
-    for (const tableName of Object.keys(batch) as TableName[]) {
+  static async seedBatch(
+    batch: Record<TableName, any[]>
+  ): Promise<Record<TableName, SeedResult>> {
+    const graph = buildDependencyGraph();
+    const order = topologicalSort(graph);
+
+    console.log("🔁 Seed Order:", order.join(" → "));
+
+    const results: Record<TableName, SeedResult> = {} as any;
+
+    for (const tableName of order) {
+      if (!batch[tableName]) continue;
       console.log(`\n▶ Seeding ${tableName}...`);
-      await SeedEngine.seed(tableName, batch[tableName]);
+      const result = await SeedEngine.seed(tableName, batch[tableName]);
+      results[tableName] = result;
     }
+
+    return results;
   }
 }

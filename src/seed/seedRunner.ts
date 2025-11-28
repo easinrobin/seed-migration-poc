@@ -9,38 +9,14 @@ import {
 import { pgPool } from "../db";
 import path from "path";
 import "dotenv/config";
-
-// Define seed configuration
-type SeedConfig = {
-  tableName: string;
-  jsonFilePath: string;
-  seedMethod: (data: any[]) => Promise<SeedResult>;
-};
-
-const SEED_CONFIGS: SeedConfig[] = [
-  {
-    tableName: "Industries",
-    jsonFilePath: process.env.INDUSTRY_JSON_FILE_PATH!,
-    seedMethod: (data) => SeedEngine.seed("Industries", data),
-  },
-  {
-    tableName: "Templates",
-    jsonFilePath: process.env.TEMPLATE_JSON_FILE_PATH!,
-    seedMethod: (data) => SeedEngine.seed("Templates", data),
-  },
-  {
-    tableName: "DefaultFields",
-    jsonFilePath: process.env.DEFAULT_FIELD_JSON_FILE_PATH!,
-    seedMethod: (data) => SeedEngine.seed("DefaultFields", data),
-  },
-];
+import { TableName, TABLE_REGISTRY } from "./config/tableRegistry";
 
 /**
  * Check if seeding is required by comparing checksums
  */
 async function isSeedingRequired(
   fileChecksum: string,
-  tableName: string
+  tableName: TableName
 ): Promise<{ required: boolean; currentVersion: number | null }> {
   const client = await pgPool.connect();
   try {
@@ -70,7 +46,7 @@ async function isSeedingRequired(
  * Get snapshot of current table state for rollback purposes
  */
 async function getTableSnapshot(
-  tableName: string
+  tableName: TableName
 ): Promise<Record<string, any>[]> {
   const client = await pgPool.connect();
   try {
@@ -85,10 +61,10 @@ async function getTableSnapshot(
 }
 
 /**
- * Update SeedVersion and create SeedHistory entry
+ * Record seed execution into SeedHistory and SeedVersion
  */
 async function recordSeedExecution(
-  tableName: string,
+  tableName: TableName,
   fileChecksum: string,
   currentVersion: number | null,
   seedStats: SeedStats,
@@ -182,24 +158,34 @@ async function recordSeedExecution(
 }
 
 /**
- * Process a single seed configuration
+ * Load all JSON seed files and prepare batch
  */
-async function processSeed(
-  config: SeedConfig,
-  environment: string
-): Promise<{
-  skipped: boolean;
-  stats?: SeedStats;
+async function prepareSeedBatch(env: string): Promise<{
+  batch: Record<TableName, any[]>;
+  seedInfo: Record<
+    TableName,
+    {
+      filePath: string;
+      fileChecksum: string;
+      required: boolean;
+      currentVersion: number | null;
+      snapshotBefore: Record<string, any>[];
+    }
+  >;
 }> {
-  const { tableName, jsonFilePath, seedMethod } = config;
-  const fileName = path.basename(jsonFilePath);
+  const batch: Record<TableName, any[]> = {} as any;
+  const seedInfo: any = {};
 
-  console.log(`\n📦 Processing: ${tableName}`);
-  console.log(`   📄 File: ${fileName}`);
+  for (const tableName of Object.keys(TABLE_REGISTRY) as TableName[]) {
+    const config = TABLE_REGISTRY[tableName];
+    const filePath = process.env[`${tableName.toUpperCase()}_JSON_FILE_PATH`];
 
-  try {
-    // Calculate checksum
-    const fileChecksum = await checksumOfFile(jsonFilePath);
+    if (!filePath) continue;
+
+    const fileName = path.basename(filePath!);
+    console.log(`   📄 File: ${fileName}`);
+    console.log(`\n📦 Preparing seed for ${tableName}`);
+    const fileChecksum = await checksumOfFile(filePath);
     console.log(`   🔐 Checksum: ${fileChecksum.substring(0, 12)}...`);
 
     // Check if seeding is required
@@ -208,70 +194,23 @@ async function processSeed(
       tableName
     );
 
-    if (!required) {
-      console.log(`   ⏭️  Skipped (no changes detected)`);
-      return { skipped: true };
+    const snapshotBefore = required ? await getTableSnapshot(tableName) : [];
+
+    if (required) {
+      const seedData = await loadWithEnvOverrides(filePath, env);
+      batch[tableName] = seedData;
     }
 
-    // Take snapshot BEFORE any changes
-    console.log(`   📸 Taking snapshot before changes...`);
-    const snapshotBefore = await getTableSnapshot(tableName);
-    console.log(`   ✓ Snapshot captured (${snapshotBefore.length} rows)`);
-
-    // Load seed data with env overrides
-    console.log(`   📖 Loading seed data...`);
-    const seedData = await loadWithEnvOverrides(jsonFilePath, environment);
-    console.log(`   📊 Loaded ${seedData.length} rows`);
-
-    // Execute seed method (returns stats or void)
-    console.log(`   🔄 Executing seed operation...`);
-    const result = await seedMethod(seedData);
-    console.log(`   ✅ Seed operation completed`);
-
-    // Default stats if method returns void
-    const seedStats = result?.stats ?? { inserted: 0, updated: 0, skipped: 0 };
-    const changes = result?.changes ?? { added: [], updated: [], deleted: [] };
-
-    // Record execution with snapshot taken BEFORE
-    await recordSeedExecution(
-      tableName,
+    seedInfo[tableName] = {
+      filePath,
       fileChecksum,
+      required,
       currentVersion,
-      seedStats,
       snapshotBefore,
-      changes,
-      "success"
-    );
-
-    return { skipped: false, stats: seedStats };
-  } catch (err: any) {
-    console.error(`   ❌ Seed failed for ${tableName}:`, err.message);
-
-    // Record failure in history
-    try {
-      const fileChecksum = await checksumOfFile(jsonFilePath);
-      const { currentVersion } = await isSeedingRequired(
-        fileChecksum,
-        tableName
-      );
-      const snapshotBefore = await getTableSnapshot(tableName);
-
-      await recordSeedExecution(
-        tableName,
-        fileChecksum,
-        currentVersion,
-        { inserted: 0, updated: 0, skipped: 0 },
-        snapshotBefore,
-        { added: [], updated: [], deleted: [] },
-        "failed",
-        { message: err.message, stack: err.stack }
-      );
-    } catch (recordErr) {
-      console.error(`   ⚠️  Could not record failure in history:`, recordErr);
-    }
-
-    throw err;
+    };
   }
+
+  return { batch, seedInfo };
 }
 
 /**
@@ -284,59 +223,72 @@ export async function run(env?: string) {
 
   const startTime = Date.now();
   const environment = env || process.env.NODE_ENV || "development";
-  let successCount = 0;
-  let skipCount = 0;
-  let failCount = 0;
-  let totalInserted = 0;
-  let totalUpdated = 0;
-  let totalSkipped = 0;
 
-  for (const config of SEED_CONFIGS) {
-    try {
-      const result = await processSeed(config, environment);
+  try {
+    const { batch, seedInfo } = await prepareSeedBatch(environment);
 
-      if (result.skipped) {
+    // Run batch seeding with FK ordering
+    const results = await SeedEngine.seedBatch(batch);
+
+    // Record execution for each table
+    let totalInserted = 0;
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    let successCount = 0;
+    let skipCount = 0;
+
+    for (const tableName of Object.keys(batch) as TableName[]) {
+      const info = seedInfo[tableName];
+      const result = results[tableName];
+
+      if (!info.required) {
         skipCount++;
-      } else {
-        successCount++;
-        if (result.stats) {
-          totalInserted += result.stats.inserted;
-          totalUpdated += result.stats.updated;
-          totalSkipped += result.stats.skipped;
-        }
+        continue;
       }
-    } catch (err) {
-      failCount++;
-      console.error(`\n⚠️  Continuing with next seed after failure...\n`);
-      // Continue with other seeds even if one fails
+
+      successCount++;
+
+      const stats = result?.stats ?? { inserted: 0, updated: 0, skipped: 0 };
+      const changes = result?.changes ?? {
+        added: [],
+        updated: [],
+        deleted: [],
+      };
+
+      totalInserted += stats.inserted;
+      totalUpdated += stats.updated;
+      totalSkipped += stats.skipped;
+
+      await recordSeedExecution(
+        tableName,
+        info.fileChecksum,
+        info.currentVersion,
+        stats,
+        info.snapshotBefore,
+        changes,
+        "success"
+      );
     }
-  }
 
-  const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-  console.log("\n╔════════════════════════════════════════╗");
-  console.log("║         Seed Operation Summary          ║");
-  console.log("╚════════════════════════════════════════╝");
-  console.log(`   ✅ Successful: ${successCount}`);
-  console.log(`   ⏭️  Skipped:    ${skipCount}`);
-  console.log(`   ❌ Failed:     ${failCount}`);
-  console.log(`   ⏱️  Duration:   ${duration}s`);
+    console.log("\n╔════════════════════════════════════════╗");
+    console.log("║         Seed Operation Summary          ║");
+    console.log("╚════════════════════════════════════════╝");
+    console.log(`   ✅ Successful: ${successCount}`);
+    console.log(`   ⏭️  Skipped:    ${skipCount}`);
+    console.log(`   📊 Inserted:   ${totalInserted}`);
+    console.log(`   📊 Updated:    ${totalUpdated}`);
+    console.log(`   📊 Skipped:    ${totalSkipped}`);
+    console.log(`   ⏱️  Duration:   ${duration}s`);
 
-  if (successCount > 0) {
-    console.log("\n   📈 Operation Details:");
-    console.log(`      • Inserted: ${totalInserted}`);
-    console.log(`      • Updated:  ${totalUpdated}`);
-    console.log(`      • Skipped:  ${totalSkipped}`);
-  }
-  console.log("");
-
-  if (failCount > 0) {
-    console.error("⚠️  Some seeds failed. Check logs above for details.");
+    console.log("\n✨ All seeds completed successfully!");
+    process.exit(0);
+  } catch (err) {
+    console.error("\n💥 Fatal error during seeding:");
+    console.error(err);
     process.exit(1);
   }
-
-  console.log("✨ All seeds completed successfully!");
-  process.exit(0);
 }
 
 if (require.main === module) {

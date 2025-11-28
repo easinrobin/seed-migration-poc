@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { createHash } from "crypto";
+import { TableName, TABLE_REGISTRY } from "../config/tableRegistry";
 
 export async function readJsonFile<T = any>(p: string): Promise<T> {
   const content = await fs.readFile(p, "utf8");
@@ -190,4 +191,69 @@ export function deepCompare(a: any, b: any): boolean {
   };
 
   return JSON.stringify(clean(a)) === JSON.stringify(clean(b));
+}
+
+export function buildDependencyGraph(): Record<TableName, TableName[]> {
+  const graph: Record<TableName, TableName[]> = {} as any;
+  const tables = Object.keys(TABLE_REGISTRY) as TableName[];
+
+  // Initialize empty lists
+  for (const table of tables) {
+    graph[table] = [];
+  }
+
+  for (const table of tables) {
+    const refs = TABLE_REGISTRY[table].references || [];
+
+    for (const ref of refs) {
+      const parentTable = ref.references.table as TableName;
+      // Add edge parent → table
+      graph[parentTable].push(table);
+    }
+  }
+
+  return graph;
+}
+
+export function topologicalSort(
+  graph: Record<TableName, TableName[]>
+): TableName[] {
+  const tables = Object.keys(graph) as TableName[];
+
+  // Compute in-degree for each table
+  const inDegree: Record<TableName, number> = {} as Record<TableName, number>;
+  tables.forEach((t) => (inDegree[t] = 0));
+  tables.forEach((parent) => {
+    graph[parent].forEach((child) => {
+      inDegree[child] = (inDegree[child] || 0) + 1;
+    });
+  });
+
+  // Start with nodes that have in-degree 0
+  const queue: TableName[] = tables.filter((t) => inDegree[t] === 0);
+  const order: TableName[] = [];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    order.push(current);
+
+    // Visit all children of current
+    for (const child of graph[current]) {
+      inDegree[child]--;
+      if (inDegree[child] === 0) {
+        queue.push(child);
+      }
+    }
+  }
+
+  if (order.length !== tables.length) {
+    const remaining = tables.filter((t) => !order.includes(t));
+    throw new Error(
+      `⚠️ Cycle detected in foreign key dependencies! Remaining tables: ${remaining.join(
+        ", "
+      )}`
+    );
+  }
+
+  return order;
 }

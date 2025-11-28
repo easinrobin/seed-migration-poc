@@ -13,6 +13,7 @@ export type TableConfig<Row = any, T extends PgTable = PgTable> = {
   schema: z.ZodSchema<any>; // Zod schema for validation
   uniqueFields: readonly string[]; // Keys used to identify record
   displayField?: string; // For logging (optional)
+  references: any[];
   loadAll(): Promise<Row[]>;
 };
 
@@ -23,6 +24,7 @@ export const TABLE_REGISTRY = {
     schema: IndustrySchema,
     uniqueFields: ["id"],
     displayField: "name",
+    references: [],
     loadAll: async () => await db.select().from(Industries),
   } satisfies TableConfig<typeof Industries.$inferSelect>,
 
@@ -33,6 +35,12 @@ export const TABLE_REGISTRY = {
     uniqueFields: ["industryId", "id"],
     displayField: "name",
     loadAll: async () => await db.select().from(Templates),
+    references: [
+      {
+        field: "industryId",
+        references: { table: "Industries", field: "id" },
+      },
+    ],
   } satisfies TableConfig<typeof Templates.$inferSelect>,
 
   DefaultFields: {
@@ -41,6 +49,13 @@ export const TABLE_REGISTRY = {
     schema: DefaultFieldsSchema,
     uniqueFields: ["industryId", "id"],
     displayField: "name",
+    references: [
+      {
+        field: "industryId",
+        references: { table: "Industries", field: "id" },
+      },
+      { field: "templateId", references: { table: "Templates", field: "id" } },
+    ],
     loadAll: async () => await db.select().from(DefaultFields),
   } satisfies TableConfig<typeof DefaultFields.$inferSelect>,
 } as const;
