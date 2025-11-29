@@ -1,7 +1,7 @@
 import { db } from "../../db";
 import { TableConfig } from "../config/tableRegistry";
 import { buildWhereClause } from "./buildWhereClause";
-import { deepCompare } from "../utils/utils";
+import { deepCompare, keysToSnakeCase, toSnakeCase } from "../utils/utils";
 
 export type RowChange =
   | { action: "insert"; id: string; data: Record<string, any> }
@@ -37,12 +37,21 @@ export async function genericUpsertWithChanges(
     // Update in-memory cache to keep consistency
     existingRows.push(inserted);
 
-    return { action: "insert", id: String(inserted.id), data: inserted };
+    // Convert to snake_case before returning
+    return {
+      action: "insert",
+      id: String(inserted.id),
+      data: keysToSnakeCase(inserted),
+    };
   }
 
   // 3️⃣ Exists + DB priority → skip
   if (seedPriority === "DB") {
-    return { action: "skip", id: existing.id, data: existing };
+    return {
+      action: "skip",
+      id: existing.id,
+      data: keysToSnakeCase(existing),
+    };
   }
 
   // 4️⃣ Compare (ignore metadata)
@@ -50,7 +59,11 @@ export async function genericUpsertWithChanges(
   const { priority, ...itemData } = item;
 
   if (deepCompare(existingData, itemData)) {
-    return { action: "skip", id: existing.id, data: existing };
+    return {
+      action: "skip",
+      id: existing.id,
+      data: keysToSnakeCase(existing),
+    };
   }
 
   // 5️⃣ Update record
@@ -67,16 +80,17 @@ export async function genericUpsertWithChanges(
   );
   if (index !== -1) existingRows[index] = updated;
 
-  // Identify changed fields
-  const changedFields = Object.keys(item).filter(
-    (k) => JSON.stringify(before[k]) !== JSON.stringify(item[k])
-  );
+  // Identify changed fields (convert to snake_case)
+  const changedFields = Object.keys(item)
+    .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(item[k]))
+    .map((field) => toSnakeCase(field));
 
+  // Convert both before and after to snake_case
   return {
     action: "update",
     id: String(updated.id),
-    before,
-    after: updated,
+    before: keysToSnakeCase(before),
+    after: keysToSnakeCase(updated),
     changedFields,
   };
 }

@@ -59,7 +59,7 @@
     "id": "temp_uid_5",
     "industryId": "ind_uid_4",
     "industryName": "Textile",
-    "name": "Fusing machine",
+    "name": "Fusing machine Template",
     "status": "draft",
     "minFields": 1,
     "maxFields": 10,
@@ -73,7 +73,7 @@
     "id": "temp_uid_6",
     "industryId": "ind_uid_4",
     "industryName": "Textile",
-    "name": "Knitting machine",
+    "name": "Knitting machine Template",
     "status": "published",
     "minFields": 1,
     "maxFields": 10,
@@ -81,7 +81,7 @@
     "maxSectionLevels": 10,
     "minSections": 1,
     "maxSections": 10,
-    "priority": "DB"
+    "priority": "SEED"
   },
   {
     "id": "temp_uid_7",
