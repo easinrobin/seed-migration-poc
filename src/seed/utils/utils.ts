@@ -257,3 +257,26 @@ export function topologicalSort(
 
   return order;
 }
+
+export function toCamelCase(str: string) {
+  if (!str) return "";
+  return str.charAt(0).toLowerCase() + str.slice(1);
+}
+
+export function toCapitalize(str: string) {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+export function toDirName(str: string) {
+  if (!str) return "";
+  return str.split(" ").join("-").toLowerCase();
+}
+
+export function camelToSnakeCase(str: string): string {
+  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
+export function toSnakeCase(str: string): string {
+  return str.toLowerCase().trim().replace(/\s+/g, "_");
+}

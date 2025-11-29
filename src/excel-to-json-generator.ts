@@ -4,6 +4,7 @@ import path from "path";
 import { TemplateSchema } from "./seed/validators/templates.validator";
 import { IndustrySchema } from "./seed/validators/industry.validator";
 import { DefaultFieldsSchema } from "./seed/validators/defaultField.validator";
+import * as utilities from "./seed/utils/utils";
 
 // Map sheet name -> { schema, filename }
 const ENTITY_MAP: Record<
@@ -12,9 +13,9 @@ const ENTITY_MAP: Record<
 > = {
   templates: { schema: TemplateSchema, name: "templates", keyField: "id" },
   industries: { schema: IndustrySchema, name: "industries", keyField: "id" },
-  default_fields: {
+  defaultFields: {
     schema: DefaultFieldsSchema,
-    name: "default_fields",
+    name: "defaultFields",
     keyField: "id",
   },
 };
@@ -23,13 +24,7 @@ type RowWithMeta = {
   rowIndex: number;
   raw: Record<string, any>;
   validated?: any;
-  environment?: string | null;
-};
-
-type SyncableRow = {
-  sync: boolean;
-  syncReason?: "new" | "modified" | "unchanged";
-  [key: string]: any;
+  environments: string[]; // Changed to array to support multiple environments
 };
 
 function ensureDir(p: string) {
@@ -37,33 +32,47 @@ function ensureDir(p: string) {
 }
 
 /**
- * Generates:
- * - seed/seed-data/generated/<entity>.json  (base rows)
- * - seed/seed-overrides/<env>/<entity>.json (env rows)
- * With sync tracking enabled
+ * Parse environment cell value - supports:
+ * - Comma-separated: "dev, staging, prod"
+ * - Semicolon-separated: "dev; staging; prod"
+ * - Pipe-separated: "dev | staging | prod"
+ */
+function parseEnvironments(envValue: any): string[] {
+  if (!envValue) return [];
+
+  const envStr = envValue.toString().trim();
+  if (envStr === "") return [];
+
+  // Split by comma, semicolon, or pipe
+  const envs = envStr
+    .split(/[,;|]/)
+    .map((e: string) => e.trim().toLowerCase())
+    .filter((e: string) => e !== "" && e !== "base");
+
+  return [...new Set<string>(envs)]; // Remove duplicates
+}
+
+/**
+ * Generates environment-specific JSON files from Excel
+ * - seed/seed-data/generated/env-overrides/<env>/<entity>.json
+ * - Skips rows without environment selection
+ * - Duplicates rows across multiple environments if needed
  */
 export function generateFromExcel(
-  excelFilePath = path.join(__dirname, "./seed/seed-data/excel/data-seed.xlsx"),
-  outBase = path.join(__dirname, "seed", "seed-data", "generated")
+  excelFilePath = path.join(__dirname, "./seed/seed-data/excel/data-seed.xlsx")
 ) {
   const workbook = XLSX.readFile(excelFilePath);
-  const overridesBase = path.join(
-    __dirname,
-    "seed",
-    "seed-data",
-    "generated",
-    "env-overrides"
-  );
+  const overridesBase = path.join(__dirname, "seed", "seed-data", "generated");
 
   const errors: string[] = [];
-  const sheetData: Record<
-    string,
-    { baseRows: any[]; envMap: Record<string, any[]> }
-  > = {};
+  const warnings: string[] = [];
+  const sheetData: Record<string, Record<string, any[]>> = {};
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
-    const normalized = sheetName.trim().toLowerCase().replace(/\s+/g, "_");
+    const normalized = utilities.toCamelCase(
+      sheetName.trim().replace(/\s+/g, "_")
+    );
 
     if (!ENTITY_MAP[normalized]) {
       console.warn(`Skipping sheet "${sheetName}" (no matching entity map).`);
@@ -71,7 +80,6 @@ export function generateFromExcel(
     }
 
     const { schema } = ENTITY_MAP[normalized];
-
     const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
     const parsedRows: RowWithMeta[] = [];
 
@@ -88,18 +96,27 @@ export function generateFromExcel(
       continue;
     }
 
+    // Validate and parse each row
     for (let i = 0; i < rows.length; i++) {
       const raw = rows[i];
-      const envRaw = (
+
+      // Parse environment column (supports multiple values)
+      const envRaw =
         raw["environment"] ||
         raw["Environment"] ||
         raw["env"] ||
         raw["ENVIRONMENT"] ||
-        ""
-      )
-        .toString()
-        .trim();
-      const environment = envRaw === "" ? null : envRaw;
+        "";
+
+      const environments = parseEnvironments(envRaw);
+
+      // Skip rows without environment selection
+      if (environments.length === 0) {
+        warnings.push(
+          `Sheet "${sheetName}" row ${i + 2}: Skipped (no environment selected)`
+        );
+        continue;
+      }
 
       // Validate row
       let validated: any = null;
@@ -115,33 +132,37 @@ export function generateFromExcel(
             i + 2
           }: ${JSON.stringify(err.errors || err.message)}`
         );
+        continue;
       }
 
       parsedRows.push({
         rowIndex: i + 2,
         raw,
         validated,
-        environment,
+        environments,
       });
     }
 
-    // Partition only after validation
-    const baseRows: any[] = [];
+    // Organize by environment
     const envMap: Record<string, any[]> = {};
 
     for (const r of parsedRows) {
       const cleanRow = { ...(r.validated ?? r.raw) };
 
-      if (!r.environment || r.environment.toLowerCase() === "base") {
-        baseRows.push(cleanRow);
-      } else {
-        const env = r.environment.toLocaleLowerCase();
+      // Remove environment column from output
+      delete cleanRow.environment;
+      delete cleanRow.Environment;
+      delete cleanRow.env;
+      delete cleanRow.ENVIRONMENT;
+
+      // Add this row to each specified environment
+      for (const env of r.environments) {
         envMap[env] = envMap[env] || [];
         envMap[env].push(cleanRow);
       }
     }
 
-    sheetData[normalized] = { baseRows, envMap };
+    sheetData[normalized] = envMap;
   }
 
   // --- IF ANY ERRORS OCCURRED → ABORT EVERYTHING ---
@@ -153,55 +174,55 @@ export function generateFromExcel(
     process.exit(1);
   }
 
-  // --- SECOND PASS: WRITE JSON ONLY IF EVERYTHING WAS VALID ---
-  ensureDir(outBase);
+  // Display warnings (non-blocking)
+  if (warnings.length > 0) {
+    console.warn("\n⚠️  WARNINGS:");
+    console.warn("------------------------------------------------------");
+    warnings.forEach((w) => console.warn("•", w));
+    console.warn("------------------------------------------------------\n");
+  }
+
+  // --- WRITE JSON FILES FOR EACH ENVIRONMENT ---
   ensureDir(overridesBase);
 
+  const allEnvironments = new Set<string>();
+  Object.values(sheetData).forEach((envMap) => {
+    Object.keys(envMap).forEach((env) => allEnvironments.add(env));
+  });
+
+  console.log(`\n📦 Found environments: ${[...allEnvironments].join(", ")}\n`);
+
   for (const key of Object.keys(sheetData)) {
-    const { baseRows, envMap } = sheetData[key];
-    const entityName = ENTITY_MAP[key].name;
+    const envMap = sheetData[key];
+    const entityNameRaw = ENTITY_MAP[key].name;
+    const entityName = utilities.toCamelCase(entityNameRaw);
 
-    console.log(`\n📄 Processing sheet: ${entityName}`);
+    console.log(`📄 Processing sheet: ${entityName}`);
 
-    // Base file with sync tracking
-    const basePath = path.join(outBase, `${ENTITY_MAP[key].name}.json`);
-    let finalBaseRows = baseRows;
-
-    fs.writeFileSync(basePath, JSON.stringify(finalBaseRows, null, 2), "utf-8");
-
-    console.log(
-      `   ✔ Base JSON written: ${entityName}.json (${finalBaseRows.length} rows)`
-    );
-    console.log(`     ↳ Path: ${basePath}`);
-
-    // Env overrides with sync tracking
     const envKeys = Object.keys(envMap);
     if (envKeys.length === 0) {
-      console.log(`   ✔ No environment overrides found for this sheet.`);
-    } else {
-      for (const env of Object.keys(envMap)) {
-        const envDir = path.join(overridesBase, env);
-        ensureDir(envDir);
+      console.log(`   ⚠️  No valid rows with environment selection found.`);
+      continue;
+    }
 
-        const envPath = path.join(envDir, `${ENTITY_MAP[key].name}.json`);
-        let finalEnvRows = envMap[env];
+    for (const env of envKeys) {
+      const envDir = path.join(overridesBase, env);
+      ensureDir(envDir);
 
-        fs.writeFileSync(
-          envPath,
-          JSON.stringify(finalEnvRows, null, 2),
-          "utf-8"
-        );
+      const envPath = path.join(envDir, `${entityName}.json`);
+      const envRows = envMap[env];
 
-        console.log(
-          `   ✔ Env override: [${env}] (${finalEnvRows.length} rows)`
-        );
-        console.log(`     ↳ Path: ${envPath}`);
-      }
+      fs.writeFileSync(envPath, JSON.stringify(envRows, null, 2), "utf-8");
+
+      console.log(`   ✔ [${env}] ${entityName}.json (${envRows.length} rows)`);
+      console.log(`     ↳ ${envPath}`);
     }
   }
 
-  console.log(`\n✅ All sheets valid. Seed JSON generated successfully.`);
-  return { base: outBase, overridesBase };
+  console.log(
+    `\n✅ All sheets processed. Environment-specific JSON files generated successfully.`
+  );
+  return { overridesBase };
 }
 
 if (require.main === module) {

@@ -5,6 +5,7 @@ import {
   readJsonFile,
   generateUUID,
   loadWithEnvOverrides,
+  toCamelCase,
 } from "./utils/utils";
 import { pgPool } from "../db";
 import path from "path";
@@ -177,10 +178,19 @@ async function prepareSeedBatch(env: string): Promise<{
   const seedInfo: any = {};
 
   for (const tableName of Object.keys(TABLE_REGISTRY) as TableName[]) {
-    const config = TABLE_REGISTRY[tableName];
-    const filePath = process.env[`${tableName.toUpperCase()}_JSON_FILE_PATH`];
+    // const filePath = process.env[`${tableName.toUpperCase()}_JSON_FILE_PATH`];
+    const filePath = path.join(
+      __dirname,
+      "..",
+      "seed",
+      "seed-data",
+      "generated",
+      env,
+      `${toCamelCase(tableName)}.json`
+    );
 
-    if (!filePath) continue;
+    if (!filePath)
+      throw new Error(`Table json file path not found: ${filePath}`);
 
     const fileName = path.basename(filePath!);
     console.log(`   📄 File: ${fileName}`);

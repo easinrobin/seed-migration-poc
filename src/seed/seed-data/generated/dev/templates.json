@@ -1,23 +1,37 @@
 [
   {
-    "id": "temp_uid_2",
+    "id": "temp_uid_1",
     "industryId": "ind_uid_1",
     "industryName": "Battery",
-    "name": "Li-ion Battery Template",
-    "status": "approved",
+    "name": "Carbon zinc battery Template",
+    "status": "draft",
     "minFields": 1,
-    "maxFields": 150,
+    "maxFields": 200,
     "minSectionLevels": 1,
-    "maxSectionLevels": 3,
+    "maxSectionLevels": 2,
     "minSections": 1,
-    "maxSections": 15,
+    "maxSections": 10,
     "priority": "DB"
+  },
+  {
+    "id": "temp_uid_3",
+    "industryId": "ind_uid_2",
+    "industryName": "Automotive",
+    "name": "BMW Template",
+    "status": "published",
+    "minFields": 1,
+    "maxFields": 300,
+    "minSectionLevels": 1,
+    "maxSectionLevels": 4,
+    "minSections": 1,
+    "maxSections": 20,
+    "priority": "SEED"
   },
   {
     "id": "temp_uid_4",
     "industryId": "ind_uid_3",
     "industryName": "Furniture",
-    "name": "Furniture Template",
+    "name": "Furniture Tech Template",
     "status": "draft",
     "minFields": 1,
     "maxFields": 20,
@@ -68,5 +82,19 @@
     "minSections": 1,
     "maxSections": 15,
     "priority": "SEED"
+  },
+  {
+    "id": "temp_uid_8",
+    "industryId": "ind_uid_6",
+    "industryName": "Footware",
+    "name": "Base Footware Template",
+    "status": "approved",
+    "minFields": 1,
+    "maxFields": 15,
+    "minSectionLevels": 1,
+    "maxSectionLevels": 10,
+    "minSections": 1,
+    "maxSections": 20,
+    "priority": "DB"
   }
 ]

@@ -1,5 +1,10 @@
 [
   {
+    "id": "ind_uid_1",
+    "name": "Battery",
+    "priority": "DB"
+  },
+  {
     "id": "ind_uid_2",
     "name": "Automotive",
     "priority": "SEED"
@@ -11,12 +16,12 @@
   },
   {
     "id": "ind_uid_5",
-    "name": "Wind Turbine",
+    "name": "Wind Turbine Tech",
     "priority": "SEED"
   },
   {
     "id": "ind_uid_6",
-    "name": "Footwear Technology",
+    "name": "Footwear",
     "priority": "SEED"
   }
 ]
