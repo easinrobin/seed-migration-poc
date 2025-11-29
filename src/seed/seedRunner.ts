@@ -1,8 +1,7 @@
 import { SeedEngine } from "./engine/seedEngine";
-import { SeedStats, ChangeSet, SeedResult } from "../entities/types";
+import { SeedStats, ChangeSet } from "../entities/types";
 import {
   checksumOfFile,
-  readJsonFile,
   generateUUID,
   loadWithEnvOverrides,
   toCamelCase,
@@ -44,24 +43,6 @@ async function isSeedingRequired(
 }
 
 /**
- * Get snapshot of current table state for rollback purposes
- */
-async function getTableSnapshot(
-  tableName: TableName
-): Promise<Record<string, any>[]> {
-  const client = await pgPool.connect();
-  try {
-    const res = await client.query(`SELECT * FROM "${tableName}"`);
-    return res.rows;
-  } catch (err) {
-    console.warn(`   ⚠ Could not get snapshot for ${tableName}:`, err);
-    return [];
-  } finally {
-    client.release();
-  }
-}
-
-/**
  * Record seed execution into SeedHistory and SeedVersion
  */
 async function recordSeedExecution(
@@ -69,7 +50,6 @@ async function recordSeedExecution(
   fileChecksum: string,
   currentVersion: number | null,
   seedStats: SeedStats,
-  snapshotBefore: Record<string, any>[],
   changes: ChangeSet,
   status: "success" | "failed" | "rolled_back",
   errorInfo?: { message: string; stack?: string }
@@ -92,9 +72,9 @@ async function recordSeedExecution(
     await client.query({
       text: `INSERT INTO "SeedHistory" (
         id, table_name, version, checksum, previous_checksum, 
-        environment, status, changes, snapshot_before, 
+        environment, status, changes, 
         error_message, error_stack
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       values: [
         generateUUID(),
         tableName,
@@ -104,7 +84,6 @@ async function recordSeedExecution(
         environment,
         status,
         JSON.stringify(changes),
-        JSON.stringify(snapshotBefore),
         errorInfo?.message || null,
         errorInfo?.stack || null,
       ],
@@ -170,7 +149,6 @@ async function prepareSeedBatch(env: string): Promise<{
       fileChecksum: string;
       required: boolean;
       currentVersion: number | null;
-      snapshotBefore: Record<string, any>[];
     }
   >;
 }> {
@@ -204,8 +182,6 @@ async function prepareSeedBatch(env: string): Promise<{
       tableName
     );
 
-    const snapshotBefore = required ? await getTableSnapshot(tableName) : [];
-
     if (required) {
       const seedData = await loadWithEnvOverrides(filePath, env);
       batch[tableName] = seedData;
@@ -216,7 +192,6 @@ async function prepareSeedBatch(env: string): Promise<{
       fileChecksum,
       required,
       currentVersion,
-      snapshotBefore,
     };
   }
 
@@ -274,7 +249,7 @@ export async function run(env?: string) {
         info.fileChecksum,
         info.currentVersion,
         stats,
-        info.snapshotBefore,
+        // info.snapshotBefore,
         changes,
         "success"
       );

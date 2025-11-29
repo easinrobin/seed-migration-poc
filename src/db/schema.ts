@@ -213,11 +213,6 @@ export const seed_history = drizzle.pgTable("SeedHistory", {
     deleted: Array<{ id: string; data: Record<string, any> }>;
   }>(),
 
-  // Snapshot for rollback (stores full state before changes)
-  snapshotBefore: drizzle
-    .jsonb("snapshot_before")
-    .$type<Array<Record<string, any>>>(),
-
   // Error tracking
   errorMessage: drizzle.text("error_message"),
   errorStack: drizzle.text("error_stack"),
